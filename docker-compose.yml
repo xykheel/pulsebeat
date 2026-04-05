@@ -1,0 +1,16 @@
+services:
+  pulsebeat:
+    build: .
+    mem_limit: 512m
+    ports:
+      - "4141:4141"
+    volumes:
+      - ./data:/app/data
+    environment:
+      NODE_ENV: production
+      PULSEBEAT_DATA_DIR: /app/data
+      # Required in production (min 16 characters). Generate e.g. openssl rand -hex 32
+      PULSEBEAT_JWT_SECRET: ${PULSEBEAT_JWT_SECRET:-}
+      # Initial admin password (only used when the users table is first created)
+      PULSEBEAT_ADMIN_PASSWORD: ${PULSEBEAT_ADMIN_PASSWORD:-}
+      PULSEBEAT_ADMIN_USER: ${PULSEBEAT_ADMIN_USER:-admin}

@@ -1,0 +1,19 @@
+/**
+ * Pulsebeat global stylesheet
+ *
+ * Tailwind layers (preflight off — MUI CssBaseline provides resets).
+ * Brand colours / fonts: `src/theme/tokens.ts` + `BrandRootStyles` → `--pb-*` vars,
+ * extended in `tailwind.config.mjs` as `pb-*` utilities.
+ *
+ * Font loading stays in `index.html` so text renders without a JS flash.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  #root {
+    @apply font-sans antialiased;
+  }
+}
