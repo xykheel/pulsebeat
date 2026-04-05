@@ -1,6 +1,12 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.8.1
+
+### For administrators
+
+- **Docker** — The image runs as the non-root **`node`** user (UID **1000**). **`/app/data`** is created with ownership for that user. If you bind-mount a host directory for persistence, make it writable for UID **1000** (for example `chown 1000:1000` on the host path).
+
 ## 1.8.0
 
 ### What’s new
