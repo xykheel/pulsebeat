@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { runMigrations } from './migrate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -88,6 +89,10 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   incident_retention_days: '90',
   password_protection_enabled: '1',
   admin_password_hash: '',
+  ssl_warning_days: '30',
+  ssl_critical_days: '7',
+  ssl_alert_self_signed: '0',
+  ssl_alert_tls_below_12: '1',
 };
 
 function migrateSettingsAndSchema(): void {
@@ -102,6 +107,7 @@ function migrateSettingsAndSchema(): void {
 }
 
 migrateSettingsAndSchema();
+runMigrations(db);
 
 export function getSetting(key: string): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as
@@ -128,12 +134,12 @@ export function getPasswordProtectionEnabled(): boolean {
   return getSetting('password_protection_enabled') !== '0';
 }
 
-export function getHeartbeatRetentionDays(): number {
+function getHeartbeatRetentionDays(): number {
   const d = parseInt(getSetting('heartbeat_retention_days'), 10);
   return Number.isFinite(d) && d > 0 ? Math.min(3650, d) : 30;
 }
 
-export function getIncidentRetentionDays(): number {
+function getIncidentRetentionDays(): number {
   const d = parseInt(getSetting('incident_retention_days'), 10);
   return Number.isFinite(d) && d > 0 ? Math.min(3650, d) : 90;
 }
@@ -146,7 +152,7 @@ export function getDbFileSizeBytes(): number {
   }
 }
 
-export function pruneOldIncidentsResolvedBefore(cutoffMs: number): number {
+function pruneOldIncidentsResolvedBefore(cutoffMs: number): number {
   return db
     .prepare('DELETE FROM incidents WHERE resolved_at IS NOT NULL AND resolved_at < ?')
     .run(cutoffMs).changes;
@@ -191,7 +197,7 @@ function syncAdminPasswordHashFromUserIfEmpty(): void {
 
 syncAdminPasswordHashFromUserIfEmpty();
 
-export interface UserRow {
+interface UserRow {
   id: number;
   username: string;
   password_hash: string;
@@ -214,42 +220,68 @@ export function updateUserPasswordHash(userId: number, passwordHash: string): bo
   return r.changes > 0;
 }
 
+export type MonitorType = 'http' | 'tcp' | 'ping' | 'dns';
+
 export interface MonitorRow {
   id: number;
   name: string;
-  type: 'http' | 'tcp' | 'ping';
+  type: MonitorType;
   url: string;
   interval_sec: number;
   timeout_ms: number;
   retries: number;
   active: number;
   check_ssl: number;
+  dns_config: string;
+}
+
+function rowToMonitor(raw: Record<string, unknown>): MonitorRow {
+  return {
+    id: Number(raw.id),
+    name: String(raw.name),
+    type: raw.type as MonitorType,
+    url: String(raw.url),
+    interval_sec: Number(raw.interval_sec),
+    timeout_ms: Number(raw.timeout_ms),
+    retries: Number(raw.retries),
+    active: Number(raw.active),
+    check_ssl: Number(raw.check_ssl ?? 0),
+    dns_config: typeof raw.dns_config === 'string' ? raw.dns_config : '{}',
+  };
 }
 
 export function listMonitors(): MonitorRow[] {
-  return db.prepare('SELECT * FROM monitors ORDER BY id ASC').all() as MonitorRow[];
+  const rows = db.prepare('SELECT * FROM monitors ORDER BY id ASC').all() as Record<string, unknown>[];
+  return rows.map(rowToMonitor);
 }
 
 export function getMonitor(id: number): MonitorRow | undefined {
-  return db.prepare('SELECT * FROM monitors WHERE id = ?').get(id) as MonitorRow | undefined;
+  const raw = db.prepare('SELECT * FROM monitors WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  return raw ? rowToMonitor(raw) : undefined;
 }
 
-export interface CreateMonitorInput {
+interface CreateMonitorInput {
   name: string;
-  type: 'http' | 'tcp' | 'ping';
+  type: MonitorType;
   url: string;
   interval_sec: number;
   timeout_ms: number;
   retries: number;
   active: number;
   check_ssl?: number;
+  dns_config?: string;
   notification_ids?: number[];
+  tag_ids?: number[];
 }
 
 export function createMonitor(row: CreateMonitorInput): MonitorRow {
+  const dnsJson =
+    typeof row.dns_config === 'string' && row.dns_config.trim()
+      ? row.dns_config.trim()
+      : '{}';
   const stmt = db.prepare(`
-    INSERT INTO monitors (name, type, url, interval_sec, timeout_ms, retries, active, check_ssl)
-    VALUES (@name, @type, @url, @interval_sec, @timeout_ms, @retries, @active, @check_ssl)
+    INSERT INTO monitors (name, type, url, interval_sec, timeout_ms, retries, active, check_ssl, dns_config)
+    VALUES (@name, @type, @url, @interval_sec, @timeout_ms, @retries, @active, @check_ssl, @dns_config)
   `);
   const info = stmt.run({
     name: row.name,
@@ -260,29 +292,44 @@ export function createMonitor(row: CreateMonitorInput): MonitorRow {
     retries: row.retries,
     active: row.active ?? 1,
     check_ssl: row.check_ssl ? 1 : 0,
+    dns_config: row.type === 'dns' ? dnsJson : '{}',
   });
   const id = Number(info.lastInsertRowid);
   if (Array.isArray(row.notification_ids)) {
     setMonitorNotifications(id, row.notification_ids);
   }
+  if (Array.isArray(row.tag_ids)) {
+    setMonitorTags(id, row.tag_ids);
+  }
   return getMonitor(id)!;
 }
 
-export interface UpdateMonitorInput {
+interface UpdateMonitorInput {
   name?: string | null;
-  type?: 'http' | 'tcp' | 'ping' | null;
+  type?: MonitorType | null;
   url?: string | null;
   interval_sec?: number | null;
   timeout_ms?: number | null;
   retries?: number | null;
   active?: number | null;
   check_ssl?: number | null;
+  dns_config?: string | null;
   notification_ids?: number[];
+  tag_ids?: number[];
 }
 
 export function updateMonitor(id: number, row: UpdateMonitorInput): MonitorRow | null {
   const existing = getMonitor(id);
   if (!existing) return null;
+  const nextType = (row.type ?? existing.type) as MonitorType;
+  let dnsCfg = (existing.dns_config && existing.dns_config.trim()) || '{}';
+  if (nextType === 'dns') {
+    if (typeof row.dns_config === 'string') {
+      dnsCfg = row.dns_config.trim() || '{}';
+    }
+  } else {
+    dnsCfg = '{}';
+  }
   db.prepare(`
     UPDATE monitors SET
       name = COALESCE(?, name),
@@ -292,7 +339,8 @@ export function updateMonitor(id: number, row: UpdateMonitorInput): MonitorRow |
       timeout_ms = COALESCE(?, timeout_ms),
       retries = COALESCE(?, retries),
       active = COALESCE(?, active),
-      check_ssl = COALESCE(?, check_ssl)
+      check_ssl = COALESCE(?, check_ssl),
+      dns_config = ?
     WHERE id = ?
   `).run(
     row.name ?? null,
@@ -303,10 +351,14 @@ export function updateMonitor(id: number, row: UpdateMonitorInput): MonitorRow |
     row.retries ?? null,
     row.active ?? null,
     row.check_ssl ?? null,
+    dnsCfg,
     id
   );
   if (Array.isArray(row.notification_ids)) {
     setMonitorNotifications(id, row.notification_ids);
+  }
+  if (Array.isArray(row.tag_ids)) {
+    setMonitorTags(id, row.tag_ids);
   }
   return getMonitor(id) ?? null;
 }
@@ -316,7 +368,7 @@ export function deleteMonitor(id: number): boolean {
   return info.changes > 0;
 }
 
-export function setMonitorNotifications(monitorId: number, notificationIds: number[]): void {
+function setMonitorNotifications(monitorId: number, notificationIds: number[]): void {
   db.prepare('DELETE FROM monitor_notifications WHERE monitor_id = ?').run(monitorId);
   const ins = db.prepare(
     'INSERT INTO monitor_notifications (monitor_id, notification_id) VALUES (?, ?)'
@@ -336,7 +388,7 @@ export function getMonitorNotificationIds(monitorId: number): number[] {
   return rows.map((r) => r.notification_id);
 }
 
-export interface NotificationRow {
+interface NotificationRow {
   id: number;
   name: string;
   type: string;
@@ -344,7 +396,7 @@ export interface NotificationRow {
   enabled: number;
 }
 
-export interface NotificationWithConfig extends Omit<NotificationRow, 'config'> {
+interface NotificationWithConfig extends Omit<NotificationRow, 'config'> {
   config: Record<string, unknown>;
 }
 
@@ -359,7 +411,7 @@ export function getEnabledNotificationsForMonitor(monitorId: number): Notificati
   return rows.map(parseConfigRow);
 }
 
-export function pruneOldHeartbeats(maxAgeMs?: number): number {
+function pruneOldHeartbeats(maxAgeMs?: number): number {
   const ms =
     maxAgeMs ?? getHeartbeatRetentionDays() * 24 * 60 * 60 * 1000;
   const cutoff = Date.now() - ms;
@@ -377,23 +429,35 @@ export function insertHeartbeat(
   monitorId: number,
   status: boolean,
   latencyMs: number | null,
-  message: string | null
+  message: string | null,
+  resolvedValue: string | null = null,
+  maintenanceFlag = 0
 ): number {
   const checkedAt = Date.now();
   db.prepare(
-    `INSERT INTO heartbeats (monitor_id, status, latency_ms, message, checked_at)
-     VALUES (?, ?, ?, ?, ?)`
-  ).run(monitorId, status ? 1 : 0, latencyMs ?? null, message ?? null, checkedAt);
+    `INSERT INTO heartbeats (monitor_id, status, latency_ms, message, checked_at, resolved_value, maintenance)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    monitorId,
+    status ? 1 : 0,
+    latencyMs ?? null,
+    message ?? null,
+    checkedAt,
+    resolvedValue,
+    maintenanceFlag ? 1 : 0
+  );
   return checkedAt;
 }
 
-export interface HeartbeatRow {
+interface HeartbeatRow {
   id: number;
   monitor_id: number;
   status: number;
   latency_ms: number | null;
   message: string | null;
   checked_at: number;
+  resolved_value: string | null;
+  maintenance: number;
 }
 
 export function getHeartbeats(monitorId: number, limit = 500): HeartbeatRow[] {
@@ -420,7 +484,7 @@ export function openIncident(monitorId: number, cause: string | null): void {
   ).run(monitorId, startedAt, cause ?? null);
 }
 
-export interface IncidentRow {
+interface IncidentRow {
   id: number;
   monitor_id: number;
   started_at: number;
@@ -472,7 +536,7 @@ function parseConfigRow(row: NotificationRow): NotificationWithConfig {
   return { ...row, config };
 }
 
-export interface CreateNotificationInput {
+interface CreateNotificationInput {
   name: string;
   type: string;
   config: string | Record<string, unknown>;
@@ -493,7 +557,7 @@ export function createNotification(row: CreateNotificationInput): NotificationWi
   return getNotification(Number(info.lastInsertRowid));
 }
 
-export interface UpdateNotificationInput {
+interface UpdateNotificationInput {
   name?: string | null;
   type?: string | null;
   config?: string | Record<string, unknown> | null;
@@ -573,7 +637,7 @@ export function avgLatency(monitorId: number, fromMs: number): number | null {
   return row?.a != null ? Math.round(row.a) : null;
 }
 
-export interface SummaryStats {
+interface SummaryStats {
   total: number;
   online: number;
   offline: number;
@@ -607,6 +671,328 @@ export function summaryStats(): SummaryStats {
     offline,
     avgResponseMs: latCount ? Math.round(latSum / latCount) : null,
   };
+}
+
+interface DashboardSummaryPayload {
+  up: number;
+  down: number;
+  paused: number;
+  sparkline_up: number[];
+  sparkline_down: number[];
+  sparkline_paused: number[];
+}
+
+export function dashboardSummary(): DashboardSummaryPayload {
+  const monitors = listMonitors();
+  const pausedCount = monitors.filter((m) => !m.active).length;
+  const activeMons = monitors.filter((m) => m.active);
+  let up = 0;
+  let down = 0;
+  for (const m of activeMons) {
+    const latest = getLatestHeartbeat(m.id);
+    if (latest && latest.status === 1) up += 1;
+    else down += 1;
+  }
+  const hourMs = 3600 * 1000;
+  const start = Date.now() - 24 * hourMs;
+  const allHb = db
+    .prepare(
+      `SELECT monitor_id, checked_at, status FROM heartbeats WHERE checked_at > ? ORDER BY monitor_id ASC, checked_at ASC`
+    )
+    .all(start) as { monitor_id: number; checked_at: number; status: number }[];
+  const byMonitor = new Map<number, { checked_at: number; status: number }[]>();
+  for (const row of allHb) {
+    const arr = byMonitor.get(row.monitor_id) ?? [];
+    arr.push(row);
+    byMonitor.set(row.monitor_id, arr);
+  }
+  const stmtBefore = db.prepare(
+    `SELECT status FROM heartbeats WHERE monitor_id = ? AND checked_at <= ? ORDER BY checked_at DESC LIMIT 1`
+  );
+  const beforeStatus = new Map<number, number | null>();
+  for (const m of monitors) {
+    const r = stmtBefore.get(m.id, start) as { status: number } | undefined;
+    beforeStatus.set(m.id, r ? r.status : null);
+  }
+  const seriesByMonitor = new Map<number, (number | null)[]>();
+  for (const m of monitors) {
+    const arr = byMonitor.get(m.id) ?? [];
+    let idx = 0;
+    let last: number | null = beforeStatus.get(m.id) ?? null;
+    const series: (number | null)[] = [];
+    for (let i = 0; i < 24; i++) {
+      const tEnd = start + (i + 1) * hourMs;
+      while (idx < arr.length && arr[idx].checked_at <= tEnd) {
+        last = arr[idx].status;
+        idx += 1;
+      }
+      series.push(last);
+    }
+    seriesByMonitor.set(m.id, series);
+  }
+  const sparkline_up: number[] = [];
+  const sparkline_down: number[] = [];
+  const sparkline_paused: number[] = [];
+  for (let i = 0; i < 24; i++) {
+    let u = 0;
+    let d = 0;
+    for (const m of monitors) {
+      if (!m.active) continue;
+      const st = seriesByMonitor.get(m.id)?.[i];
+      if (st === 1) u += 1;
+      else if (st === 0) d += 1;
+      else d += 1;
+    }
+    sparkline_up.push(u);
+    sparkline_down.push(d);
+    sparkline_paused.push(pausedCount);
+  }
+  return {
+    up,
+    down,
+    paused: pausedCount,
+    sparkline_up,
+    sparkline_down,
+    sparkline_paused,
+  };
+}
+
+export interface TagRow {
+  id: number;
+  name: string;
+  color: string;
+}
+
+export function listTags(): TagRow[] {
+  return db.prepare('SELECT id, name, color FROM tags ORDER BY name COLLATE NOCASE ASC').all() as TagRow[];
+}
+
+function getTag(id: number): TagRow | undefined {
+  return db.prepare('SELECT id, name, color FROM tags WHERE id = ?').get(id) as TagRow | undefined;
+}
+
+export function createTag(name: string, color: string): TagRow | null {
+  const n = name.trim().slice(0, 80);
+  if (!n) return null;
+  const c = /^#[0-9A-Fa-f]{6}$/.test(color.trim()) ? color.trim() : '#6366f1';
+  try {
+    const info = db.prepare('INSERT INTO tags (name, color) VALUES (?, ?)').run(n, c);
+    return getTag(Number(info.lastInsertRowid)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function updateTag(id: number, name: string | null, color: string | null): TagRow | null {
+  const existing = getTag(id);
+  if (!existing) return null;
+  const n = name != null ? name.trim().slice(0, 80) : null;
+  let c: string | null = null;
+  if (color != null) {
+    const t = color.trim();
+    c = /^#[0-9A-Fa-f]{6}$/.test(t) ? t : existing.color;
+  }
+  try {
+    db.prepare(
+      `
+      UPDATE tags SET
+        name = COALESCE(?, name),
+        color = COALESCE(?, color)
+      WHERE id = ?
+    `
+    ).run(n, c, id);
+  } catch {
+    return null;
+  }
+  return getTag(id) ?? null;
+}
+
+export function deleteTag(id: number): boolean {
+  const r = db.prepare('DELETE FROM tags WHERE id = ?').run(id);
+  return r.changes > 0;
+}
+
+export function setMonitorTags(monitorId: number, tagIds: number[]): void {
+  db.prepare('DELETE FROM monitor_tags WHERE monitor_id = ?').run(monitorId);
+  const ins = db.prepare('INSERT INTO monitor_tags (monitor_id, tag_id) VALUES (?, ?)');
+  const tx = db.transaction((ids: number[]) => {
+    for (const tid of ids) {
+      ins.run(monitorId, Number(tid));
+    }
+  });
+  tx(tagIds.map(Number).filter((x) => !Number.isNaN(x)));
+}
+
+export function getTagsForMonitor(monitorId: number): TagRow[] {
+  return db
+    .prepare(
+      `SELECT t.id, t.name, t.color FROM tags t
+       INNER JOIN monitor_tags mt ON mt.tag_id = t.id
+       WHERE mt.monitor_id = ?
+       ORDER BY t.name COLLATE NOCASE ASC`
+    )
+    .all(monitorId) as TagRow[];
+}
+
+export interface MaintenanceWindowRow {
+  id: number;
+  name: string;
+  monitor_id: number | null;
+  starts_at: number;
+  ends_at: number;
+  recurring: number;
+  cron_expression: string | null;
+  timezone: string;
+  active: number;
+}
+
+export function listMaintenanceWindows(): MaintenanceWindowRow[] {
+  return db
+    .prepare('SELECT * FROM maintenance_windows ORDER BY starts_at DESC')
+    .all() as MaintenanceWindowRow[];
+}
+
+export function getMaintenanceWindow(id: number): MaintenanceWindowRow | undefined {
+  return db
+    .prepare('SELECT * FROM maintenance_windows WHERE id = ?')
+    .get(id) as MaintenanceWindowRow | undefined;
+}
+
+interface MaintenanceWindowInput {
+  name: string;
+  monitor_id: number | null;
+  starts_at: number;
+  ends_at: number;
+  /** 1 or 0 */
+  recurring: number;
+  cron_expression: string | null;
+  timezone: string;
+  /** 1 or 0 */
+  active: number;
+}
+
+export function createMaintenanceWindow(row: MaintenanceWindowInput): MaintenanceWindowRow {
+  const info = db
+    .prepare(
+      `INSERT INTO maintenance_windows (name, monitor_id, starts_at, ends_at, recurring, cron_expression, timezone, active)
+       VALUES (@name, @monitor_id, @starts_at, @ends_at, @recurring, @cron_expression, @timezone, @active)`
+    )
+    .run({
+      name: row.name.trim().slice(0, 120),
+      monitor_id: row.monitor_id,
+      starts_at: row.starts_at,
+      ends_at: row.ends_at,
+      recurring: row.recurring ? 1 : 0,
+      cron_expression: row.cron_expression?.trim() ? row.cron_expression.trim() : null,
+      timezone: row.timezone?.trim() || 'Australia/Sydney',
+      active: row.active ? 1 : 0,
+    });
+  return getMaintenanceWindow(Number(info.lastInsertRowid))!;
+}
+
+export function updateMaintenanceWindow(
+  id: number,
+  row: Partial<MaintenanceWindowInput>
+): MaintenanceWindowRow | null {
+  const ex = getMaintenanceWindow(id);
+  if (!ex) return null;
+  const name = row.name !== undefined ? row.name.trim().slice(0, 120) : ex.name;
+  const monitor_id = row.monitor_id !== undefined ? row.monitor_id : ex.monitor_id;
+  const starts_at = row.starts_at !== undefined ? row.starts_at : ex.starts_at;
+  const ends_at = row.ends_at !== undefined ? row.ends_at : ex.ends_at;
+  const recurring = row.recurring !== undefined ? (row.recurring ? 1 : 0) : ex.recurring;
+  const cron_expression =
+    row.cron_expression !== undefined
+      ? row.cron_expression?.trim()
+        ? row.cron_expression.trim()
+        : null
+      : ex.cron_expression;
+  const timezone = row.timezone !== undefined ? row.timezone.trim() || 'Australia/Sydney' : ex.timezone;
+  const active = row.active !== undefined ? (row.active ? 1 : 0) : ex.active;
+  db.prepare(
+    `UPDATE maintenance_windows SET
+      name = ?, monitor_id = ?, starts_at = ?, ends_at = ?, recurring = ?, cron_expression = ?, timezone = ?, active = ?
+     WHERE id = ?`
+  ).run(name, monitor_id, starts_at, ends_at, recurring, cron_expression, timezone, active, id);
+  return getMaintenanceWindow(id) ?? null;
+}
+
+export function deleteMaintenanceWindow(id: number): boolean {
+  return db.prepare('DELETE FROM maintenance_windows WHERE id = ?').run(id).changes > 0;
+}
+
+export interface SslCheckRow {
+  id: number;
+  monitor_id: number;
+  checked_at: number;
+  status: number;
+  days_remaining: number | null;
+  subject_cn: string | null;
+  subject_alt_names: string | null;
+  serial_number: string | null;
+  sha256_fingerprint: string | null;
+  tls_version: string | null;
+  cipher_suite: string | null;
+  chain_fully_trusted: number | null;
+  self_signed: number | null;
+  valid_from: number | null;
+  valid_to: number | null;
+  message: string | null;
+}
+
+export type SslCheckInsert = Omit<SslCheckRow, 'id'>;
+
+export function insertSslCheck(row: SslCheckInsert): void {
+  db.prepare(
+    `INSERT INTO ssl_checks (
+      monitor_id, checked_at, status, days_remaining, subject_cn, subject_alt_names, serial_number,
+      sha256_fingerprint, tls_version, cipher_suite, chain_fully_trusted, self_signed, valid_from, valid_to, message
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    row.monitor_id,
+    row.checked_at,
+    row.status,
+    row.days_remaining,
+    row.subject_cn,
+    row.subject_alt_names,
+    row.serial_number,
+    row.sha256_fingerprint,
+    row.tls_version,
+    row.cipher_suite,
+    row.chain_fully_trusted,
+    row.self_signed,
+    row.valid_from,
+    row.valid_to,
+    row.message
+  );
+}
+
+export function listSslChecks(monitorId: number, limit: number): SslCheckRow[] {
+  return db
+    .prepare(
+      `SELECT * FROM ssl_checks WHERE monitor_id = ? ORDER BY checked_at DESC LIMIT ?`
+    )
+    .all(monitorId, limit) as SslCheckRow[];
+}
+
+export function getLatestSslCheck(monitorId: number): SslCheckRow | undefined {
+  return db
+    .prepare(`SELECT * FROM ssl_checks WHERE monitor_id = ? ORDER BY checked_at DESC LIMIT 1`)
+    .get(monitorId) as SslCheckRow | undefined;
+}
+
+export interface CheckBarPoint {
+  status: number;
+  latency_ms: number | null;
+}
+
+export function getRecentCheckBars(monitorId: number, n: number): CheckBarPoint[] {
+  const rows = db
+    .prepare(
+      `SELECT status, latency_ms FROM heartbeats WHERE monitor_id = ? ORDER BY checked_at DESC LIMIT ?`
+    )
+    .all(monitorId, n) as { status: number; latency_ms: number | null }[];
+  return rows.slice().reverse();
 }
 
 export { db };

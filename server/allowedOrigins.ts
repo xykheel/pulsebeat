@@ -7,7 +7,7 @@ const ENV_KEY = 'PULSEBEAT_ALLOWED_ORIGINS';
  * Parse comma-separated absolute origins (e.g. https://pulsebeat.example.com).
  * Used for CORS (credentialed) and Content-Security-Policy connect-src.
  */
-export function parseAllowedOrigins(raw: string | undefined): string[] {
+function parseAllowedOrigins(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
   const seen = new Set<string>();
   const out: string[] = [];
@@ -40,11 +40,7 @@ function loadOrigins(): string[] {
   return cachedOrigins;
 }
 
-export function getAllowedOrigins(): readonly string[] {
-  return loadOrigins();
-}
-
-export function getAllowedOriginSet(): ReadonlySet<string> {
+function getAllowedOriginSet(): ReadonlySet<string> {
   if (!cachedSet) {
     cachedSet = new Set(loadOrigins());
   }

@@ -95,5 +95,3 @@ export const tokens = {
   motion,
   typography: fontStacks,
 } as const;
-
-export type Tokens = typeof tokens;

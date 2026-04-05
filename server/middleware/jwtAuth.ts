@@ -3,7 +3,7 @@ import { AUTH_COOKIE_NAME, verifyUserToken } from '../auth/tokens.js';
 import { getPasswordProtectionEnabled } from '../db.js';
 
 /** Used when password protection is disabled (open dashboard). */
-export const GUEST_USER = { id: -1, username: 'guest' };
+const GUEST_USER = { id: -1, username: 'guest' };
 
 export function attachUserFromJwt(req: Request, _res: Response, next: NextFunction): void {
   let token: string | undefined = req.cookies?.[AUTH_COOKIE_NAME];

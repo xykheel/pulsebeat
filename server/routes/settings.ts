@@ -36,6 +36,10 @@ function publicSettingsPayload(merged: Record<string, string>) {
     password_protection_enabled: merged.password_protection_enabled !== '0',
     has_admin_password: Boolean(merged.admin_password_hash?.length),
     db_size_bytes: getDbFileSizeBytes(),
+    ssl_warning_days: parseIntSetting(merged.ssl_warning_days, 30, 1, 3650),
+    ssl_critical_days: parseIntSetting(merged.ssl_critical_days, 7, 1, 3650),
+    ssl_alert_self_signed: merged.ssl_alert_self_signed === '1',
+    ssl_alert_tls_below_12: merged.ssl_alert_tls_below_12 !== '0',
   };
 }
 
@@ -75,6 +79,22 @@ router.put('/', (req: Request, res: Response) => {
     if (body.incident_retention_days !== undefined) {
       const n = parseIntSetting(String(body.incident_retention_days), 90, 1, 3650);
       setSetting('incident_retention_days', String(n));
+    }
+    if (body.ssl_warning_days !== undefined) {
+      const n = parseIntSetting(String(body.ssl_warning_days), 30, 1, 3650);
+      setSetting('ssl_warning_days', String(n));
+    }
+    if (body.ssl_critical_days !== undefined) {
+      const n = parseIntSetting(String(body.ssl_critical_days), 7, 1, 3650);
+      setSetting('ssl_critical_days', String(n));
+    }
+    if (body.ssl_alert_self_signed !== undefined) {
+      const on = body.ssl_alert_self_signed === true || body.ssl_alert_self_signed === 1;
+      setSetting('ssl_alert_self_signed', on ? '1' : '0');
+    }
+    if (body.ssl_alert_tls_below_12 !== undefined) {
+      const on = body.ssl_alert_tls_below_12 === true || body.ssl_alert_tls_below_12 === 1;
+      setSetting('ssl_alert_tls_below_12', on ? '1' : '0');
     }
     if (body.password_protection_enabled !== undefined) {
       const on = body.password_protection_enabled === true || body.password_protection_enabled === 1;

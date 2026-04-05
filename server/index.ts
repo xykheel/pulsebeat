@@ -12,6 +12,8 @@ import monitorsRouter from './routes/monitors.js';
 import notificationsRouter from './routes/notifications.js';
 import summaryRouter from './routes/summary.js';
 import settingsRouter from './routes/settings.js';
+import tagsRouter from './routes/tags.js';
+import maintenanceRouter from './routes/maintenance.js';
 import { attachUserFromJwt, requireAuth } from './middleware/jwtAuth.js';
 import { rescheduleAll, startPruneJob } from './checker.js';
 import { readAppInfo } from './readAppInfo.js';
@@ -61,6 +63,8 @@ app.get('/api/app-info', requireAuth, (_req: Request, res: Response) => {
 app.use('/api/summary', requireAuth, summaryRouter);
 app.use('/api/notifications', requireAuth, notificationsRouter);
 app.use('/api/monitors', requireAuth, monitorsRouter);
+app.use('/api/tags', requireAuth, tagsRouter);
+app.use('/api/maintenance-windows', requireAuth, maintenanceRouter);
 app.use('/api/settings', requireAuth, settingsRouter);
 
 const staticDir = resolveStaticDir();

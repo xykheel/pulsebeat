@@ -1,68 +1,89 @@
-Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org/).
+Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
+
+## 1.8.0
+
+### What’s new
+
+- **Dashboard** — Monitors are shown in a clear table: name and target, status, a compact response-time strip for recent checks, type, coloured **tags**, and a shortcut to edit. Filter by type, status, or tags, search by name or address, and page through the list. At the top, **Up**, **Down**, and **Paused** summaries include a light trend in the background for the last day.
+- **Navigation** — A **collapsible sidebar** on the left holds the Pulsebeat name, version, main sections, and your account. On a wide screen you can narrow it to icons only; your choice is remembered. On phones and small tablets, the menu opens from the side when you tap the menu control; the rest of the screen stays focused on your content.
+- **Tags** — Create tags with colours from **Add monitor** or **Edit monitor** (including **Manage tags**), then attach them to monitors. Tags appear as chips on the dashboard and help you filter what you’re looking at.
+- **DNS checks** — Add monitors that resolve hostnames (common record types supported). You can optionally require a specific answer and use a custom resolver. Results appear on the monitor’s detail page.
+- **Maintenance windows** — Schedule times when checks still run but **alerts and new incidents are paused**—for example during planned work. Set them under **Maintenance**; the dashboard and affected monitors show a clear notice while a window is active. Recurring schedules can follow a cron-style pattern in your chosen timezone.
+- **SSL and certificates** — For HTTPS monitors with certificate checks enabled, Pulsebeat records richer certificate details and shows a **health** view on the monitor page: status, time to expiry, TLS version, trust, and history. Under **Settings** you can tune warning levels and optional alerts for self-signed certs or older TLS.
+- **Version** — The running version appears in the sidebar (when expanded) and under **Settings → About**.
+
+### For administrators
+
+- Upgrades apply **database updates automatically** on first start. If you host Pulsebeat behind your own domain, see earlier notes (v1.6.0) about allowed origins in your environment.
+
+### What’s changed (1.8.0 follow-up)
+
+- **Layout** — The sidebar stays within the viewport height while the main area scrolls, so long pages no longer stretch the navigation column.
+- **Settings** — Options are organised under tabs (General, Data retention, Self-monitoring, SSL alerting, About); only the active tab’s cards are shown. Tag management is no longer on this page.
+- **Tags** — Create, edit, and delete tags from the monitor dialog (**New tag** / **Manage tags**) so tagging stays next to where you assign monitors.
+- **Branding** — The Pulsebeat mark in the sidebar, login screen, and monitor detail header uses the **Ssid chart** icon instead of the heart.
+- **Housekeeping** — Removed dead exports and unused helpers flagged by static analysis (theme barrel, notification providers, database internals, maintenance helpers), added a direct **`@mui/system`** dependency for typings, and fixed Express ambient typings to import **`express`**.
 
 ## 1.7.1
 
 ### What’s changed
 
-- **Dashboard cards** — Uptime bar and response sparkline sit in a single metrics strip under a light divider (no extra vertical stretch). Labels use consistent uppercase captions and spacing; sparkline is slightly larger and aligned with its label.
+- **Dashboard** — Uptime bar and response sparkline are grouped in one strip with clearer labels and a slightly larger sparkline.
 
 ## 1.7.0
 
 ### What’s new
 
-- **Self-monitoring (Settings)** — **Resource usage** panel with Docker-style metrics: CPU %, memory (usage / limit), cumulative Net I/O, block I/O, and PIDs, read from **cgroup v2** when available (typical in modern Docker). Polls every **3 seconds** while the Settings page is open and the tab is visible. Falls back to cgroup v1 memory-only or process-level stats when cgroups are not exposed.
+- **Resource usage (Settings)** — When Pulsebeat runs in **Docker** (or a similar Linux container), **Settings** can show live **CPU**, **memory**, **network**, and related stats. Figures refresh while you stay on the page. Simpler environments may show a smaller subset.
 
 ## 1.6.1
 
 ### What’s changed
 
-- **Settings** — The **Notifications** and **Authentication** sections were removed from the Settings page. Use **Notifications** in the nav for channels and **Account → Change password** for the admin password.
+- **Settings** — Notification channels and account password are managed from their own areas in the app (not buried inside Settings).
 
 ## 1.6.0
 
 ### What’s new
 
-- **Allowed origins** — Set `PULSEBEAT_ALLOWED_ORIGINS` to a comma-separated list of absolute origins (for example `https://pulsebeat.example.com`). Each entry is added to **Content-Security-Policy** `connect-src` (with matching `ws:` / `wss:` where applicable) and may receive **credentialed CORS** responses for `/api` requests. If a reverse proxy injects its own **Content-Security-Policy-Report-Only** (for example `connect-src 'none'`), adjust or remove that header at the proxy; Pulsebeat cannot override headers added in front of the app.
+- **Hosting behind a domain** — If you access Pulsebeat from a specific website address, you can list those addresses in your server configuration so the browser is allowed to talk to the app securely. See your deployment guide for the exact variable name.
 
 ## 1.5.0
 
 ### What’s new
 
-- **Settings** — New **Settings** page (`/settings`) stores options in SQLite: app display name, default monitor interval/timeout/retries, heartbeat and incident retention (with estimated database file size and a **Purge old data now** action), notification channel list with enable/disable and delete, optional **password protection** toggle with admin password stored as a bcrypt hash (synced with the seeded admin user), and **About** (app version, process uptime, Node.js version, optional GitHub link via `PULSEBEAT_GITHUB_URL`).
-- **TLS monitoring** — HTTP monitors can **validate TLS certificates** on `https://` URLs after a successful response; expiry and subject appear in check messages and on the monitor detail **SSL / TLS** section.
-- **Monitor detail** — **Recent checks** table (latest 50 heartbeats), TLS summary for HTTPS monitors, **TLS** badge when validation is enabled, and polling pauses when the document tab is hidden.
+- **Settings** — Configure the app name, defaults for new monitors, how long history is kept (with optional cleanup), notification channels, optional **password protection**, and **About** (version, uptime, optional project link).
+- **TLS on HTTPS monitors** — Optionally verify certificates after a successful check; expiry and basics show in the UI.
+- **Monitor detail** — Recent checks in a table, clearer TLS notes, and updates pause when the browser tab is in the background.
 
 ## 1.4.0
 
 ### What’s new
 
-- **Mobile navigation** — On smaller viewports, **Dashboard** and **Notifications** move into a **hamburger menu** (drawer) so the bar stays usable; desktop layout is unchanged.
-- **Monitor detail summary** — The top metrics card uses a clearer **grid** layout with more **spacing**, readable **labels**, and a **status chip** that wraps on its own line so it no longer overlaps the “Latest check” timestamp.
+- **Small screens** — Dashboard and Notifications stay easy to reach from a slide-out menu.
+- **Monitor detail** — Top summary is easier to read, with clearer spacing and status wording.
 
 ## 1.3.0
 
 ### What’s new
 
-- **Navigation** — Dashboard and Notifications sit beside the Pulsebeat brand on the left; each has a clear icon. Your account uses an **avatar** with a menu for **Change password** and **Sign out**.
-- **Change password** — New page under **Account → Change password** (`/account/password`) with a secure API (current password check, rate limiting, minimum length).
-- **Page headers** — Monitors, Notifications, monitor detail, and change-password views show a matching header icon.
-- **Status colours** — Online/offline greens and reds are **softer** (mint and coral tones) for long sessions on dark backgrounds.
+- **Navigation** — Icons for main sections and an account menu (**Change password**, **Sign out**).
+- **Change password** — Dedicated page with sensible security rules.
+- **Look and feel** — Softer greens and reds for status on dark backgrounds.
 
 ## 1.2.0
 
 ### What’s new
 
-- **TypeScript everywhere** — The server, client, and tooling scripts are written in TypeScript for safer refactors and clearer APIs. The server runs via `tsx`; the client build type-checks before Vite bundles.
-- **Design system** — Brand colours, typography, and layout tokens live in one place (`theme/tokens.ts`), with a MUI theme, shared `sx` presets, and CSS variables on `:root` for non-MUI surfaces.
-- **Tailwind CSS** — Tailwind is integrated alongside Material UI (preflight off, scoped to `#root`) for layout and utilities; nav and several shells use utility classes tied to the same brand tokens.
+- **Reliability and design** — Internal codebase and theming improvements for a more consistent, maintainable experience.
 
 ## 1.1.0
 
 ### What’s new
 
-- **What’s new dialog** — When you open Pulsebeat after an upgrade, you’ll see a short summary of changes so you always know what’s different.
-- **App version** — The running version is now tracked and shown with the update notes, so you can confirm you’re on the latest build.
+- **After you upgrade** — A short “what’s new” summary when you open the app.
+- **Version in the app** — Easier to confirm you’re on the build you expect.
 
 ## 1.0.0
 

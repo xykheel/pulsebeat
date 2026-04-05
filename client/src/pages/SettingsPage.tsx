@@ -5,6 +5,8 @@ import {
   Button,
   Link,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
@@ -118,6 +120,7 @@ export default function SettingsPage() {
   const [purging, setPurging] = useState(false);
   const [metrics, setMetrics] = useState<ContainerMetricsPayload | null>(null);
   const [metricsError, setMetricsError] = useState('');
+  const [settingsTab, setSettingsTab] = useState(0);
   const [form, setForm] = useState({
     app_name: '',
     default_interval_sec: '60',
@@ -125,6 +128,10 @@ export default function SettingsPage() {
     default_retries: '0',
     heartbeat_retention_days: '30',
     incident_retention_days: '90',
+    ssl_warning_days: '30',
+    ssl_critical_days: '7',
+    ssl_alert_self_signed: false,
+    ssl_alert_tls_below_12: true,
   });
 
   const load = useCallback(async () => {
@@ -144,6 +151,10 @@ export default function SettingsPage() {
         default_retries: String(s.default_retries),
         heartbeat_retention_days: String(s.heartbeat_retention_days),
         incident_retention_days: String(s.incident_retention_days),
+        ssl_warning_days: String(s.ssl_warning_days ?? 30),
+        ssl_critical_days: String(s.ssl_critical_days ?? 7),
+        ssl_alert_self_signed: Boolean(s.ssl_alert_self_signed),
+        ssl_alert_tls_below_12: s.ssl_alert_tls_below_12 !== false,
       }));
       setError('');
     } catch (e) {
@@ -189,6 +200,10 @@ export default function SettingsPage() {
       default_retries: String(s.default_retries),
       heartbeat_retention_days: String(s.heartbeat_retention_days),
       incident_retention_days: String(s.incident_retention_days),
+      ssl_warning_days: String(s.ssl_warning_days ?? 30),
+      ssl_critical_days: String(s.ssl_critical_days ?? 7),
+      ssl_alert_self_signed: Boolean(s.ssl_alert_self_signed),
+      ssl_alert_tls_below_12: s.ssl_alert_tls_below_12 !== false,
     }));
     window.dispatchEvent(new CustomEvent('pulsebeat:settings-updated'));
   }
@@ -202,6 +217,24 @@ export default function SettingsPage() {
         default_interval_sec: Number(form.default_interval_sec),
         default_timeout_ms: Number(form.default_timeout_ms),
         default_retries: Number(form.default_retries),
+      });
+      if (s) applySettingsResponse(s);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveSsl() {
+    setSaving(true);
+    setError('');
+    try {
+      const s = await apiSend<AppSettingsPublic>('/api/settings', 'PUT', {
+        ssl_warning_days: Number(form.ssl_warning_days),
+        ssl_critical_days: Number(form.ssl_critical_days),
+        ssl_alert_self_signed: form.ssl_alert_self_signed,
+        ssl_alert_tls_below_12: form.ssl_alert_tls_below_12,
       });
       if (s) applySettingsResponse(s);
     } catch (e) {
@@ -265,7 +298,28 @@ export default function SettingsPage() {
         </Alert>
       ) : null}
 
-      <Stack spacing={2.5}>
+      <Tabs
+        value={settingsTab}
+        onChange={(_, v) => setSettingsTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{
+          mb: 2,
+          borderBottom: 1,
+          borderColor: 'divider',
+          '& .MuiTab-root': { textTransform: 'none', minHeight: 44 },
+        }}
+      >
+        <Tab label="General" id="settings-tab-0" aria-controls="settings-panel-0" />
+        <Tab label="Data retention" id="settings-tab-1" aria-controls="settings-panel-1" />
+        <Tab label="Self-monitoring" id="settings-tab-2" aria-controls="settings-panel-2" />
+        <Tab label="SSL alerting" id="settings-tab-3" aria-controls="settings-panel-3" />
+        <Tab label="About" id="settings-tab-4" aria-controls="settings-panel-4" />
+      </Tabs>
+
+      {settingsTab === 0 ? (
+      <Stack spacing={2.5} role="tabpanel" id="settings-panel-0" aria-labelledby="settings-tab-0">
         <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Typography variant="h6" gutterBottom>
             General
@@ -311,7 +365,11 @@ export default function SettingsPage() {
             </Button>
           </Stack>
         </GlassCard>
+      </Stack>
+      ) : null}
 
+      {settingsTab === 1 ? (
+      <Stack spacing={2.5} role="tabpanel" id="settings-panel-1" aria-labelledby="settings-tab-1">
         <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Typography variant="h6" gutterBottom>
             Data retention
@@ -353,7 +411,11 @@ export default function SettingsPage() {
             </Stack>
           </Stack>
         </GlassCard>
+      </Stack>
+      ) : null}
 
+      {settingsTab === 2 ? (
+      <Stack spacing={2.5} role="tabpanel" id="settings-panel-2" aria-labelledby="settings-tab-2">
         <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Typography variant="h6" gutterBottom>
             Self-monitoring
@@ -451,7 +513,68 @@ export default function SettingsPage() {
             ) : null}
           </Stack>
         </GlassCard>
+      </Stack>
+      ) : null}
 
+      {settingsTab === 3 ? (
+      <Stack spacing={2.5} role="tabpanel" id="settings-panel-3" aria-labelledby="settings-tab-3">
+        <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Typography variant="h6" gutterBottom>
+            SSL alerting
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Thresholds apply when TLS validation is enabled on HTTP monitors. Notifications use the same channels as
+            uptime alerts.
+          </Typography>
+          <Stack spacing={2} sx={{ maxWidth: 480 }}>
+            <TextField
+              label="Warning threshold (days remaining)"
+              type="number"
+              value={form.ssl_warning_days}
+              onChange={(e) => setForm((f) => ({ ...f, ssl_warning_days: e.target.value }))}
+              fullWidth
+              inputProps={{ min: 1, max: 3650 }}
+            />
+            <TextField
+              label="Critical threshold (days remaining)"
+              type="number"
+              value={form.ssl_critical_days}
+              onChange={(e) => setForm((f) => ({ ...f, ssl_critical_days: e.target.value }))}
+              fullWidth
+              inputProps={{ min: 1, max: 3650 }}
+            />
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Typography variant="body2">Alert on self-signed certificates</Typography>
+              <Button
+                size="small"
+                variant={form.ssl_alert_self_signed ? 'contained' : 'outlined'}
+                onClick={() => setForm((f) => ({ ...f, ssl_alert_self_signed: !f.ssl_alert_self_signed }))}
+              >
+                {form.ssl_alert_self_signed ? 'On' : 'Off'}
+              </Button>
+            </Stack>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Typography variant="body2">Alert on TLS below 1.2</Typography>
+              <Button
+                size="small"
+                variant={form.ssl_alert_tls_below_12 ? 'contained' : 'outlined'}
+                onClick={() =>
+                  setForm((f) => ({ ...f, ssl_alert_tls_below_12: !f.ssl_alert_tls_below_12 }))
+                }
+              >
+                {form.ssl_alert_tls_below_12 ? 'On' : 'Off'}
+              </Button>
+            </Stack>
+            <Button variant="contained" onClick={() => void saveSsl()} disabled={saving}>
+              Save SSL settings
+            </Button>
+          </Stack>
+        </GlassCard>
+      </Stack>
+      ) : null}
+
+      {settingsTab === 4 ? (
+      <Stack spacing={2.5} role="tabpanel" id="settings-panel-4" aria-labelledby="settings-tab-4">
         <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Typography variant="h6" gutterBottom>
             About
@@ -486,6 +609,7 @@ export default function SettingsPage() {
           )}
         </GlassCard>
       </Stack>
+      ) : null}
     </Box>
   );
 }

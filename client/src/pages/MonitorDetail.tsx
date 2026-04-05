@@ -23,7 +23,8 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import FavoriteIcon from '@mui/icons-material/Favorite';
+import SsidChartIcon from '@mui/icons-material/SsidChart';
+import BuildIcon from '@mui/icons-material/Build';
 import { apiGet, apiSend } from '../api';
 import GlassCard from '../components/GlassCard';
 import StatusPulse from '../components/StatusPulse';
@@ -31,13 +32,17 @@ import ResponseTimeChart from '../components/ResponseTimeChart';
 import UptimeBar90 from '../components/UptimeBar90';
 import Sparkline from '../components/Sparkline';
 import MonitorFormDialog from '../components/MonitorFormDialog';
-import type { EnrichedMonitor, HeartbeatPoint, IncidentRow, NotificationItem } from '../types';
-
-function tlsSummaryFromMessage(message: string | null | undefined): string | null {
-  if (!message || !message.includes('TLS')) return null;
-  const idx = message.indexOf('TLS');
-  return message.slice(idx).trim();
-}
+import SslHealthPanel from '../components/SslHealthPanel';
+import type {
+  DnsConfig,
+  EnrichedMonitor,
+  HeartbeatPoint,
+  IncidentRow,
+  MaintenanceWindowRow,
+  NotificationItem,
+  SslCheckRow,
+  TagRow,
+} from '../types';
 
 export default function MonitorDetail() {
   const { id } = useParams();
@@ -46,6 +51,9 @@ export default function MonitorDetail() {
   const [heartbeats, setHeartbeats] = useState<HeartbeatPoint[]>([]);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [tags, setTags] = useState<TagRow[]>([]);
+  const [sslChecks, setSslChecks] = useState<SslCheckRow[]>([]);
+  const [activeMaint, setActiveMaint] = useState<MaintenanceWindowRow[]>([]);
   const [editOpen, setEditOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
   const [error, setError] = useState('');
@@ -53,16 +61,33 @@ export default function MonitorDetail() {
   const load = useCallback(async () => {
     if (!id || document.visibilityState !== 'visible') return;
     try {
-      const [m, h, inc, n] = await Promise.all([
+      const mid = Number(id);
+      const [m, h, inc, n, t, mw] = await Promise.all([
         apiGet<EnrichedMonitor>(`/api/monitors/${id}`),
         apiGet<HeartbeatPoint[]>(`/api/monitors/${id}/heartbeats?limit=2000`),
         apiGet<IncidentRow[]>(`/api/monitors/${id}/incidents?limit=100`),
         apiGet<NotificationItem[]>('/api/notifications'),
+        apiGet<TagRow[]>('/api/tags'),
+        apiGet<{ windows: MaintenanceWindowRow[] }>('/api/maintenance-windows/active'),
       ]);
       setMonitor(m);
       setHeartbeats(h);
       setIncidents(inc);
       setNotifications(n);
+      setTags(t);
+      const relevant = (mw.windows ?? []).filter(
+        (w) => w.monitor_id == null || w.monitor_id === mid
+      );
+      setActiveMaint(relevant);
+      let ssl: SslCheckRow[] = [];
+      if (m.check_ssl === 1) {
+        try {
+          ssl = await apiGet<SslCheckRow[]>(`/api/monitors/${id}/ssl-checks?limit=30`);
+        } catch {
+          ssl = [];
+        }
+      }
+      setSslChecks(ssl);
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -108,9 +133,8 @@ export default function MonitorDetail() {
   const chartPoints = [...heartbeats].reverse().filter((p) => p.latency_ms != null);
   const recentChecks = heartbeats.slice(0, 50);
   const isHttps = monitor.type === 'http' && monitor.url.trim().toLowerCase().startsWith('https:');
-  const tlsLine =
-    monitor.type === 'http' ? tlsSummaryFromMessage(monitor.latest?.message) : null;
-  const showTlsCard = monitor.type === 'http' && (!!monitor.check_ssl || isHttps);
+  const dnsCfg = monitor.dns_config as DnsConfig;
+  const maintBanner = activeMaint.length > 0;
 
   return (
     <Box>
@@ -131,12 +155,13 @@ export default function MonitorDetail() {
           ) : (
             <StatusPulse up={up} />
           )}
-          <FavoriteIcon
+          <SsidChartIcon
             className="text-pb-primary shrink-0"
             sx={{ fontSize: { xs: '1.75rem', sm: '2rem' } }}
             aria-hidden
           />
           <Typography variant="h4" noWrap component="span">
+            {monitor.in_maintenance ? <span title="Maintenance">🔧 </span> : null}
             {monitor.name}
           </Typography>
           {monitor.type === 'http' && monitor.check_ssl ? (
@@ -154,6 +179,13 @@ export default function MonitorDetail() {
       {error ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
           {error}
+        </Alert>
+      ) : null}
+
+      {maintBanner ? (
+        <Alert severity="warning" icon={<BuildIcon />} sx={{ mb: 2 }}>
+          This monitor is in an active maintenance window. Checks still run, but alerts and new incidents are
+          suppressed.
         </Alert>
       ) : null}
 
@@ -175,7 +207,7 @@ export default function MonitorDetail() {
                   component="p"
                   sx={{ m: 0, width: '100%', wordBreak: 'break-word', lineHeight: 1.5 }}
                 >
-                  {monitor.url}
+                  {monitor.type === 'dns' ? String(dnsCfg.hostname || monitor.url) : monitor.url}
                 </Typography>
                 <Typography
                   variant="caption"
@@ -190,6 +222,24 @@ export default function MonitorDetail() {
                   {monitor.retries}
                   {monitor.type === 'http' && monitor.check_ssl ? ' · TLS validation on' : ''}
                 </Typography>
+                {monitor.tags.length ? (
+                  <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 1 }}>
+                    {monitor.tags.map((t) => (
+                      <Chip
+                        key={t.id}
+                        label={t.name}
+                        size="small"
+                        sx={{
+                          height: 22,
+                          fontSize: '0.7rem',
+                          bgcolor: `${t.color}33`,
+                          border: '1px solid',
+                          borderColor: `${t.color}55`,
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                ) : null}
               </Stack>
             </Grid>
             <Grid item xs={12} sm={6} lg={3}>
@@ -269,7 +319,13 @@ export default function MonitorDetail() {
                   variant="caption"
                   color="text.secondary"
                   component="h2"
-                  sx={{ fontWeight: 600, letterSpacing: '0.04em', lineHeight: 1.5, width: '100%', textAlign: { xs: 'left', lg: 'right' } }}
+                  sx={{
+                    fontWeight: 600,
+                    letterSpacing: '0.04em',
+                    lineHeight: 1.5,
+                    width: '100%',
+                    textAlign: { xs: 'left', lg: 'right' },
+                  }}
                 >
                   Sparkline (recent)
                 </Typography>
@@ -285,6 +341,74 @@ export default function MonitorDetail() {
           </Grid>
         </GlassCard>
 
+        {monitor.type === 'dns' ? (
+          <GlassCard sx={{ p: 2.5 }}>
+            <Typography variant="h6" gutterBottom>
+              DNS
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="caption" color="text.secondary">
+                  Current resolved value
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-word' }}>
+                  {monitor.latest?.resolved_value || '—'}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="caption" color="text.secondary">
+                  Expected value
+                </Typography>
+                <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 0.5 }}>
+                  <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                    {dnsCfg.expected_ip ? String(dnsCfg.expected_ip) : '— (not set)'}
+                  </Typography>
+                  {dnsCfg.expected_ip ? (
+                    <Chip
+                      size="small"
+                      label={
+                        monitor.latest?.resolved_value &&
+                        String(monitor.latest.resolved_value)
+                          .toLowerCase()
+                          .includes(String(dnsCfg.expected_ip).toLowerCase())
+                          ? 'Match'
+                          : 'Mismatch'
+                      }
+                      color={
+                        monitor.latest?.resolved_value &&
+                        String(monitor.latest.resolved_value)
+                          .toLowerCase()
+                          .includes(String(dnsCfg.expected_ip).toLowerCase())
+                          ? 'success'
+                          : 'warning'
+                      }
+                      variant="outlined"
+                    />
+                  ) : null}
+                </Stack>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="caption" color="text.secondary">
+                  Record type
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {String(dnsCfg.record_type || 'A')}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="caption" color="text.secondary">
+                  Resolver
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {dnsCfg.resolver && String(dnsCfg.resolver).trim()
+                    ? String(dnsCfg.resolver)
+                    : 'System default'}
+                </Typography>
+              </Grid>
+            </Grid>
+          </GlassCard>
+        ) : null}
+
         <GlassCard sx={{ p: 2.5 }}>
           <Typography variant="h6" gutterBottom>
             Response time
@@ -292,25 +416,16 @@ export default function MonitorDetail() {
           <ResponseTimeChart points={chartPoints} />
         </GlassCard>
 
-        {showTlsCard ? (
+        {monitor.check_ssl === 1 ? (
+          <SslHealthPanel latest={sslChecks[0] ?? null} history={sslChecks} />
+        ) : isHttps ? (
           <GlassCard sx={{ p: 2.5 }}>
             <Typography variant="h6" gutterBottom>
               SSL / TLS
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              {monitor.check_ssl
-                ? 'Certificate validity is checked after each successful HTTP response (HTTPS URLs only).'
-                : 'TLS validation is off. Enable it in the monitor editor for HTTPS targets.'}
-            </Typography>
-            <Typography variant="dataSmall" component="p" sx={{ m: 0, lineHeight: 1.55, wordBreak: 'break-word' }}>
-              {monitor.check_ssl
-                ? tlsLine ||
-                  (monitor.latest
-                    ? monitor.latest.message || '—'
-                    : 'No check data yet')
-                : isHttps
-                  ? 'TLS certificate validation is disabled for this monitor. Enable “Validate TLS certificate” to record expiry and chain status on each check.'
-                  : '—'}
+            <Typography variant="body2" color="text.secondary">
+              TLS validation is off. Enable “Validate TLS certificate” in the monitor editor to record certificate
+              health and history.
             </Typography>
           </GlassCard>
         ) : null}
@@ -329,6 +444,7 @@ export default function MonitorDetail() {
                     <TableCell>Time (Sydney)</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Latency</TableCell>
+                    {monitor.type === 'dns' ? <TableCell>Resolved</TableCell> : null}
                     <TableCell>Message</TableCell>
                   </TableRow>
                 </TableHead>
@@ -351,6 +467,9 @@ export default function MonitorDetail() {
                       <TableCell align="right" sx={{ typography: 'dataSmall' }}>
                         {row.latency_ms != null ? `${row.latency_ms} ms` : '—'}
                       </TableCell>
+                      {monitor.type === 'dns' ? (
+                        <TableCell sx={{ typography: 'body2', maxWidth: 200 }}>{row.resolved_value || '—'}</TableCell>
+                      ) : null}
                       <TableCell sx={{ typography: 'body2', maxWidth: 280 }}>{row.message || '—'}</TableCell>
                     </TableRow>
                   ))}
@@ -406,7 +525,9 @@ export default function MonitorDetail() {
         onClose={() => setEditOpen(false)}
         monitor={monitor}
         notifications={notifications}
+        tags={tags}
         onSaved={load}
+        onTagsChanged={load}
       />
 
       <Dialog open={delOpen} onClose={() => setDelOpen(false)}>

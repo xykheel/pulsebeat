@@ -17,7 +17,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import MonitorHeartIcon from '@mui/icons-material/Favorite';
+import SsidChartIcon from '@mui/icons-material/SsidChart';
 import { useAuth } from '../contexts/AuthContext';
 import { brand, loginPaperSx } from '../theme';
 
@@ -58,7 +58,7 @@ export default function LoginPage() {
           onSubmit={(e) => void submit(e)}
         >
           <Box className="mb-6 flex items-center justify-center gap-2">
-            <MonitorHeartIcon className="h-8 w-8 text-pb-primary" aria-hidden />
+            <SsidChartIcon className="h-8 w-8 text-pb-primary" aria-hidden />
             <Typography variant="h5" component="h1" fontWeight={700}>
               {brand.displayName}
             </Typography>

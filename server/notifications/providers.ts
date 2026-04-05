@@ -25,7 +25,7 @@ async function fetchJson(url: string, options: RequestInit = {}): Promise<unknow
   return parsed;
 }
 
-export async function sendTelegram(
+async function sendTelegram(
   config: NotificationConfig,
   title: string,
   body: string
@@ -45,7 +45,7 @@ export async function sendTelegram(
   });
 }
 
-export async function sendDiscord(
+async function sendDiscord(
   config: NotificationConfig,
   title: string,
   body: string
@@ -61,7 +61,7 @@ export async function sendDiscord(
   });
 }
 
-export async function sendSlack(
+async function sendSlack(
   config: NotificationConfig,
   title: string,
   body: string
@@ -75,7 +75,7 @@ export async function sendSlack(
   });
 }
 
-export async function sendSmtp(
+async function sendSmtp(
   config: NotificationConfig,
   title: string,
   body: string
@@ -101,7 +101,7 @@ export async function sendSmtp(
   });
 }
 
-export async function sendCustomWebhook(
+async function sendCustomWebhook(
   config: NotificationConfig,
   title: string,
   body: string
@@ -135,7 +135,7 @@ export async function sendCustomWebhook(
   if (!res.ok) throw new Error(`Webhook HTTP ${res.status}`);
 }
 
-export async function sendTeams(
+async function sendTeams(
   config: NotificationConfig,
   title: string,
   body: string
@@ -157,7 +157,7 @@ export async function sendTeams(
   });
 }
 
-export async function sendPushover(
+async function sendPushover(
   config: NotificationConfig,
   title: string,
   body: string
@@ -177,7 +177,7 @@ export async function sendPushover(
   });
 }
 
-export async function sendPushbullet(
+async function sendPushbullet(
   config: NotificationConfig,
   title: string,
   body: string
@@ -194,7 +194,7 @@ export async function sendPushbullet(
   });
 }
 
-export async function sendPagerDuty(
+async function sendPagerDuty(
   config: NotificationConfig,
   title: string,
   body: string
@@ -216,7 +216,7 @@ export async function sendPagerDuty(
   });
 }
 
-export async function sendGotify(
+async function sendGotify(
   config: NotificationConfig,
   title: string,
   body: string
@@ -233,7 +233,7 @@ export async function sendGotify(
   });
 }
 
-export async function sendNtfy(
+async function sendNtfy(
   config: NotificationConfig,
   title: string,
   body: string
@@ -255,7 +255,7 @@ export async function sendNtfy(
   if (!res.ok) throw new Error(`Ntfy HTTP ${res.status}`);
 }
 
-export async function sendRocketChat(
+async function sendRocketChat(
   config: NotificationConfig,
   title: string,
   body: string
@@ -269,7 +269,7 @@ export async function sendRocketChat(
   });
 }
 
-export async function sendSignal(
+async function sendSignal(
   config: NotificationConfig,
   title: string,
   body: string
@@ -285,7 +285,7 @@ export async function sendSignal(
   });
 }
 
-export async function sendMatrix(
+async function sendMatrix(
   config: NotificationConfig,
   title: string,
   body: string
@@ -310,14 +310,14 @@ export async function sendMatrix(
   });
 }
 
-export function escapeHtml(s: string): string {
+function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
 
-export async function sendTwilio(
+async function sendTwilio(
   config: NotificationConfig,
   title: string,
   body: string
@@ -345,7 +345,7 @@ export async function sendTwilio(
   });
 }
 
-export async function sendApprise(
+async function sendApprise(
   config: NotificationConfig,
   title: string,
   body: string

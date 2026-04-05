@@ -13,14 +13,20 @@ import {
   dailyUptimeBars,
   avgLatency,
   getMergedSettings,
+  getTagsForMonitor,
+  getRecentCheckBars,
+  listSslChecks,
+  setMonitorTags,
   type MonitorRow,
+  type MonitorType,
   type DailyBar,
+  type TagRow,
+  type CheckBarPoint,
 } from '../db.js';
 import { scheduleMonitor, clearMonitorSchedule } from '../checker.js';
+import { isMonitorInActiveMaintenance } from '../maintenance.js';
 
 const router = Router();
-
-type MonitorType = 'http' | 'tcp' | 'ping';
 
 interface MonitorBody {
   name?: string;
@@ -34,6 +40,8 @@ interface MonitorBody {
   active?: boolean | number;
   check_ssl?: boolean | number;
   notification_ids?: number[];
+  dns_config?: unknown;
+  tag_ids?: number[];
 }
 
 interface NormalisedMonitor {
@@ -46,6 +54,17 @@ interface NormalisedMonitor {
   active?: number;
   check_ssl?: number;
   notification_ids?: number[];
+  dns_config?: string;
+  tag_ids?: number[];
+}
+
+function serialiseDnsConfig(input: unknown): string | undefined {
+  if (input === undefined) return undefined;
+  if (typeof input === 'string') return input.trim() || '{}';
+  if (input && typeof input === 'object') {
+    return JSON.stringify(input);
+  }
+  return undefined;
 }
 
 function normaliseBody(body: unknown): NormalisedMonitor | null {
@@ -55,7 +74,7 @@ function normaliseBody(body: unknown): NormalisedMonitor | null {
   const timeout = b.timeout ?? b.timeout_ms;
   const t = b.type;
   const type: MonitorType | undefined =
-    t === 'http' || t === 'tcp' || t === 'ping' ? t : undefined;
+    t === 'http' || t === 'tcp' || t === 'ping' || t === 'dns' ? t : undefined;
   return {
     name: typeof b.name === 'string' ? b.name.trim() : undefined,
     type,
@@ -67,9 +86,10 @@ function normaliseBody(body: unknown): NormalisedMonitor | null {
     retries:
       b.retries !== undefined ? Math.max(0, Math.min(10, Number(b.retries) || 0)) : undefined,
     active: b.active !== undefined ? (b.active ? 1 : 0) : undefined,
-    check_ssl:
-      b.check_ssl !== undefined ? (b.check_ssl ? 1 : 0) : undefined,
+    check_ssl: b.check_ssl !== undefined ? (b.check_ssl ? 1 : 0) : undefined,
     notification_ids: Array.isArray(b.notification_ids) ? b.notification_ids : undefined,
+    dns_config: serialiseDnsConfig(b.dns_config),
+    tag_ids: Array.isArray(b.tag_ids) ? b.tag_ids : undefined,
   };
 }
 
@@ -83,18 +103,33 @@ interface EnrichedMonitor {
   retries: number;
   active: number;
   check_ssl: number;
+  dns_config: Record<string, unknown>;
   notification_ids: number[];
+  tag_ids: number[];
+  tags: TagRow[];
+  in_maintenance: boolean;
   latest: {
     status: number;
     latency_ms: number | null;
     message: string | null;
     checked_at: number;
+    resolved_value: string | null;
+    maintenance: number;
   } | null;
   uptime_pct_90d: number | null;
   uptime_pct_24h: number | null;
   avg_latency_ms: number | null;
   daily_bars: DailyBar[];
   sparkline: (number | null)[];
+  recent_checks_30: CheckBarPoint[];
+}
+
+function parseDnsObject(raw: string): Record<string, unknown> {
+  try {
+    return JSON.parse(raw || '{}') as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 function enrichMonitor(m: MonitorRow): EnrichedMonitor {
@@ -109,6 +144,7 @@ function enrichMonitor(m: MonitorRow): EnrichedMonitor {
   const recent = getHeartbeats(m.id, 48)
     .reverse()
     .map((h) => (h.status === 1 && h.latency_ms != null ? h.latency_ms : null));
+  const tags = getTagsForMonitor(m.id);
   return {
     id: m.id,
     name: m.name,
@@ -119,13 +155,19 @@ function enrichMonitor(m: MonitorRow): EnrichedMonitor {
     retries: m.retries,
     active: m.active,
     check_ssl: m.check_ssl ?? 0,
+    dns_config: parseDnsObject(m.dns_config || '{}'),
     notification_ids: getMonitorNotificationIds(m.id),
+    tag_ids: tags.map((t) => t.id),
+    tags,
+    in_maintenance: isMonitorInActiveMaintenance(m.id),
     latest: latest
       ? {
           status: latest.status,
           latency_ms: latest.latency_ms,
           message: latest.message,
           checked_at: latest.checked_at,
+          resolved_value: latest.resolved_value ?? null,
+          maintenance: latest.maintenance ?? 0,
         }
       : null,
     uptime_pct_90d: up90,
@@ -133,6 +175,7 @@ function enrichMonitor(m: MonitorRow): EnrichedMonitor {
     avg_latency_ms: avg,
     daily_bars: bars,
     sparkline: recent,
+    recent_checks_30: getRecentCheckBars(m.id, 30),
   };
 }
 
@@ -150,6 +193,9 @@ router.post('/', (req: Request, res: Response) => {
   if (!p?.name || !p.type || !p.url) {
     return res.status(400).json({ error: 'name, type, and url are required' });
   }
+  if (p.type === 'dns' && !p.dns_config) {
+    p.dns_config = '{}';
+  }
   try {
     const defs = getMergedSettings();
     const di = parseInt(defs.default_interval_sec || '60', 10);
@@ -164,13 +210,70 @@ router.post('/', (req: Request, res: Response) => {
       retries: p.retries ?? (Number.isFinite(dr) ? Math.min(10, Math.max(0, dr)) : 0),
       active: p.active ?? 1,
       check_ssl: p.check_ssl ?? 0,
+      dns_config: p.type === 'dns' ? p.dns_config ?? '{}' : undefined,
       notification_ids: p.notification_ids,
+      tag_ids: p.tag_ids,
     });
     if (row.active) scheduleMonitor(row);
     else clearMonitorSchedule(row.id);
     res.status(201).json(enrichMonitor(row));
   } catch {
     res.status(500).json({ error: 'Failed to create monitor' });
+  }
+});
+
+router.get('/:id/ssl-checks', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
+  if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 30));
+  try {
+    res.json(listSslChecks(id, limit));
+  } catch {
+    res.status(500).json({ error: 'Failed to load SSL checks' });
+  }
+});
+
+router.get('/:id/heartbeats', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
+  if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
+  const limit = Math.min(5000, Math.max(1, Number(req.query.limit) || 500));
+  try {
+    res.json(getHeartbeats(id, limit));
+  } catch {
+    res.status(500).json({ error: 'Failed to load heartbeats' });
+  }
+});
+
+router.get('/:id/incidents', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
+  if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  try {
+    res.json(getIncidents(id, limit));
+  } catch {
+    res.status(500).json({ error: 'Failed to load incidents' });
+  }
+});
+
+router.put('/:id/tags', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
+  if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
+  const body = (req.body || {}) as { tag_ids?: unknown };
+  if (!Array.isArray(body.tag_ids)) {
+    return res.status(400).json({ error: 'tag_ids array required' });
+  }
+  const tag_ids = body.tag_ids.map((x) => Number(x)).filter((n) => !Number.isNaN(n));
+  try {
+    setMonitorTags(id, tag_ids);
+    const m = getMonitor(id);
+    if (!m) return res.status(404).json({ error: 'Not found' });
+    res.json(enrichMonitor(m));
+  } catch {
+    res.status(500).json({ error: 'Failed to update tags' });
   }
 });
 
@@ -199,7 +302,9 @@ router.put('/:id', (req: Request, res: Response) => {
       retries: p.retries,
       active: p.active,
       check_ssl: p.check_ssl,
+      dns_config: p.dns_config,
       notification_ids: p.notification_ids,
+      tag_ids: p.tag_ids,
     });
     if (!row) return res.status(404).json({ error: 'Not found' });
     if (row.active) scheduleMonitor(row);
@@ -217,30 +322,6 @@ router.delete('/:id', (req: Request, res: Response) => {
   const ok = deleteMonitor(id);
   if (!ok) return res.status(404).json({ error: 'Not found' });
   res.status(204).end();
-});
-
-router.get('/:id/heartbeats', (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
-  if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
-  const limit = Math.min(5000, Math.max(1, Number(req.query.limit) || 500));
-  try {
-    res.json(getHeartbeats(id, limit));
-  } catch {
-    res.status(500).json({ error: 'Failed to load heartbeats' });
-  }
-});
-
-router.get('/:id/incidents', (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
-  if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
-  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
-  try {
-    res.json(getIncidents(id, limit));
-  } catch {
-    res.status(500).json({ error: 'Failed to load incidents' });
-  }
 });
 
 export default router;
