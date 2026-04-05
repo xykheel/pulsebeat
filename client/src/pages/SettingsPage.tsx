@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Alert,
   Box,
@@ -10,9 +10,16 @@ import {
 } from '@mui/material';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import ShowChartIcon from '@mui/icons-material/ShowChart';
+import SpeedIcon from '@mui/icons-material/Speed';
+import MemoryIcon from '@mui/icons-material/Memory';
+import StorageIcon from '@mui/icons-material/Storage';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import SouthIcon from '@mui/icons-material/South';
+import NorthIcon from '@mui/icons-material/North';
 import { apiGet, apiSend } from '../api';
 import GlassCard from '../components/GlassCard';
-import type { AboutInfo, AppSettingsPublic } from '../types';
+import type { AboutInfo, AppSettingsPublic, ContainerMetricsPayload } from '../types';
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -37,12 +44,80 @@ function formatUptime(sec: number): string {
   return parts.join(' ');
 }
 
+function formatMemoryRow(m: ContainerMetricsPayload): string {
+  if (m.memory_bytes == null) return '—';
+  const cur = formatBytes(m.memory_bytes);
+  if (m.memory_limit_bytes != null && m.memory_percent != null) {
+    return `${cur} / ${formatBytes(m.memory_limit_bytes)} (${m.memory_percent.toFixed(2)}%)`;
+  }
+  if (m.memory_limit_bytes != null) {
+    return `${cur} / ${formatBytes(m.memory_limit_bytes)}`;
+  }
+  return `${cur} (no cgroup limit)`;
+}
+
+function formatNetRow(m: ContainerMetricsPayload): string {
+  const rx = m.net_rx_bytes != null ? formatBytes(m.net_rx_bytes) : '—';
+  const tx = m.net_tx_bytes != null ? formatBytes(m.net_tx_bytes) : '—';
+  return `${rx} \u2193 · ${tx} \u2191`;
+}
+
+function formatBlockRow(m: ContainerMetricsPayload): string {
+  const r = m.block_read_bytes != null ? formatBytes(m.block_read_bytes) : '—';
+  const w = m.block_write_bytes != null ? formatBytes(m.block_write_bytes) : '—';
+  return `${r} read · ${w} write`;
+}
+
+function formatPidsRow(m: ContainerMetricsPayload): string {
+  if (m.pids == null) return '—';
+  if (m.pids_max != null) return `${m.pids} / ${m.pids_max}`;
+  return String(m.pids);
+}
+
+function MetricRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      spacing={2}
+      sx={{
+        py: 1,
+        borderBottom: 1,
+        borderColor: 'divider',
+      }}
+    >
+      <Stack direction="row" alignItems="center" spacing={1.25} sx={{ minWidth: 0 }}>
+        <Box sx={{ color: 'primary.main', display: 'flex', '& svg': { fontSize: '1.15rem' } }} aria-hidden>
+          {icon}
+        </Box>
+        <Typography variant="body2" color="text.secondary" component="span">
+          {label}
+        </Typography>
+      </Stack>
+      <Typography variant="dataSmall" sx={{ textAlign: 'right', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        {value}
+      </Typography>
+    </Stack>
+  );
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettingsPublic | null>(null);
   const [about, setAbout] = useState<AboutInfo | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [purging, setPurging] = useState(false);
+  const [metrics, setMetrics] = useState<ContainerMetricsPayload | null>(null);
+  const [metricsError, setMetricsError] = useState('');
   const [form, setForm] = useState({
     app_name: '',
     default_interval_sec: '60',
@@ -79,6 +154,30 @@ export default function SettingsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let intervalId: ReturnType<typeof setInterval>;
+    async function fetchMetrics() {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const m = await apiGet<ContainerMetricsPayload>('/api/settings/container-stats');
+        setMetrics(m);
+        setMetricsError('');
+      } catch (e) {
+        setMetricsError(e instanceof Error ? e.message : 'Failed to load metrics');
+      }
+    }
+    void fetchMetrics();
+    intervalId = setInterval(() => void fetchMetrics(), 3000);
+    function onVis() {
+      if (document.visibilityState === 'visible') void fetchMetrics();
+    }
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
 
   function applySettingsResponse(s: AppSettingsPublic) {
     setSettings(s);
@@ -252,6 +351,104 @@ export default function SettingsPage() {
                 {purging ? 'Purging…' : 'Purge old data now'}
               </Button>
             </Stack>
+          </Stack>
+        </GlassCard>
+
+        <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Typography variant="h6" gutterBottom>
+            Self-monitoring
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Live view of this process cgroup (typical in Docker). CPU % needs two samples and updates with each poll.
+          </Typography>
+          <Stack
+            sx={{
+              borderRadius: 1,
+              border: 1,
+              borderColor: 'divider',
+              px: 2,
+              py: 0.5,
+              maxWidth: 560,
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 1.25 }}>
+              <ShowChartIcon className="text-pb-primary" fontSize="small" aria-hidden />
+              <Typography
+                variant="overline"
+                component="h2"
+                sx={{ letterSpacing: '0.14em', fontWeight: 700, lineHeight: 1.2 }}
+              >
+                Resource usage
+              </Typography>
+            </Stack>
+            {metricsError ? (
+              <Typography variant="caption" color="error" sx={{ pb: 1 }}>
+                {metricsError}
+              </Typography>
+            ) : null}
+            {metrics ? (
+              <>
+                <MetricRow
+                  icon={<SpeedIcon fontSize="inherit" />}
+                  label="CPU"
+                  value={metrics.cpu_percent != null ? `${metrics.cpu_percent.toFixed(2)}%` : '—'}
+                />
+                <MetricRow
+                  icon={<MemoryIcon fontSize="inherit" />}
+                  label="Memory"
+                  value={formatMemoryRow(metrics)}
+                />
+                <MetricRow
+                  icon={
+                    <Stack direction="row" spacing={0.25} aria-hidden>
+                      <SouthIcon sx={{ fontSize: '0.95rem' }} />
+                      <NorthIcon sx={{ fontSize: '0.95rem' }} />
+                    </Stack>
+                  }
+                  label="Net I/O"
+                  value={formatNetRow(metrics)}
+                />
+                <MetricRow
+                  icon={<StorageIcon fontSize="inherit" />}
+                  label="Block I/O"
+                  value={formatBlockRow(metrics)}
+                />
+                <MetricRow
+                  icon={<AccountTreeIcon fontSize="inherit" />}
+                  label="PIDs"
+                  value={formatPidsRow(metrics)}
+                />
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                Loading metrics…
+              </Typography>
+            )}
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                py: 1.25,
+                display: 'block',
+                borderTop: 1,
+                borderColor: 'divider',
+                mt: 0.5,
+                pt: 1.5,
+              }}
+            >
+              Updates every 3 s while this page is open · live
+            </Typography>
+            {metrics?.source === 'cgroup_v1_memory' ? (
+              <Typography variant="caption" color="text.secondary" sx={{ pb: 1.5, display: 'block' }}>
+                cgroup v1: memory limits only. Full stats (CPU %, PIDs, block I/O) need cgroup v2 (common on modern
+                Docker).
+              </Typography>
+            ) : null}
+            {metrics?.source === 'process' ? (
+              <Typography variant="caption" color="text.secondary" sx={{ pb: 1.5, display: 'block' }}>
+                Not running in a cgroup-aware container: showing process RSS and network counters only.
+              </Typography>
+            ) : null}
           </Stack>
         </GlassCard>
 
