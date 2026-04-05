@@ -24,16 +24,16 @@ export const colors = {
     primaryChannel: '107, 168, 184',
   },
   status: {
-    /** Softer mint — easier on dark backgrounds than pure neon green. */
-    online: '#6BCF9C',
+    /** Muted sage — lower luminance for OLED and long sessions (chips, charts, pulses). */
+    online: '#5E9B81',
     /** Soft coral / dusty rose — less harsh than pure red. */
     offline: '#E8958F',
-    onlineChannel: '107, 207, 156',
+    onlineChannel: '94, 155, 129',
     offlineChannel: '232, 149, 143',
     warning: 'rgba(255, 200, 120, 0.45)',
-    onlineContainer: 'rgba(107, 207, 156, 0.14)',
+    onlineContainer: 'rgba(94, 155, 129, 0.14)',
     offlineContainer: 'rgba(232, 149, 143, 0.14)',
-    onlineBorder: 'rgba(107, 207, 156, 0.32)',
+    onlineBorder: 'rgba(94, 155, 129, 0.32)',
     offlineBorder: 'rgba(232, 149, 143, 0.32)',
   },
   surface: {

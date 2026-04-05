@@ -562,6 +562,24 @@ function maybeSslNotify(
   }
 }
 
+/** Run a single check immediately (manual refresh). */
+export async function checkMonitorNow(monitorId: number): Promise<void> {
+  const fresh = getMonitor(monitorId);
+  if (!fresh) throw new Error('Monitor not found');
+  try {
+    await runCheck(fresh);
+  } catch {
+    insertHeartbeat(
+      fresh.id,
+      false,
+      null,
+      'Checker error',
+      null,
+      isMonitorInActiveMaintenance(fresh.id) ? 1 : 0
+    );
+  }
+}
+
 async function runCheck(monitor: MonitorRow): Promise<void> {
   const timeout = monitor.timeout_ms;
   const retries = monitor.retries ?? 0;

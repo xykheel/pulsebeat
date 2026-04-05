@@ -3,11 +3,16 @@ import { Link as RouterLink } from 'react-router-dom';
 import {
   Avatar,
   Box,
+  ClickAwayListener,
+  Collapse,
   IconButton,
+  List,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
+  Paper,
   Typography,
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -17,15 +22,19 @@ import { useAuth } from '../contexts/AuthContext';
 export default function UserMenu({
   variant = 'toolbar',
   sidebarShowLabel = true,
+  /** Desktop sidebar icon-only rail — compact action rows */
+  sidebarCollapsed = false,
 }: {
   variant?: 'toolbar' | 'sidebar';
-  /** When variant is sidebar, show username beside avatar */
   sidebarShowLabel?: boolean;
+  sidebarCollapsed?: boolean;
 }) {
   const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
+  const toolbarOpen = Boolean(anchorEl);
+  const [sidebarPanelOpen, setSidebarPanelOpen] = useState(false);
   const initial = user?.username?.charAt(0).toUpperCase() || '?';
+  const menuCompact = variant === 'sidebar' && sidebarCollapsed;
 
   const avatar = (
     <Avatar
@@ -42,25 +51,17 @@ export default function UserMenu({
     </Avatar>
   );
 
-  const menu = (
+  const toolbarMenu = (
     <Menu
       id="user-account-menu"
       anchorEl={anchorEl}
-      open={open}
+      open={toolbarOpen}
       onClose={() => setAnchorEl(null)}
-      anchorOrigin={
-        variant === 'sidebar'
-          ? { vertical: 'top', horizontal: 'right' }
-          : { vertical: 'bottom', horizontal: 'right' }
-      }
-      transformOrigin={
-        variant === 'sidebar'
-          ? { vertical: 'bottom', horizontal: 'left' }
-          : { vertical: 'top', horizontal: 'right' }
-      }
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       slotProps={{
         paper: {
-          sx: { minWidth: 220, mt: variant === 'sidebar' ? -1 : 1, ml: variant === 'sidebar' ? 1 : 0 },
+          sx: { minWidth: 220, mt: 1 },
         },
       }}
     >
@@ -101,38 +102,116 @@ export default function UserMenu({
 
   if (variant === 'sidebar') {
     return (
-      <>
+      <ClickAwayListener onClickAway={() => setSidebarPanelOpen(false)}>
         <Box
           sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            px: sidebarShowLabel ? 1.5 : 0.5,
-            py: 1.25,
-            justifyContent: sidebarShowLabel ? 'flex-start' : 'center',
+            position: 'relative',
             width: '100%',
-            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
           }}
         >
-          <IconButton
-            onClick={(e) => setAnchorEl(e.currentTarget)}
-            aria-controls={open ? 'user-account-menu' : undefined}
-            aria-haspopup="true"
-            aria-expanded={open ? 'true' : undefined}
-            aria-label="Account menu"
-            size="small"
-            sx={{ p: 0.25, flexShrink: 0 }}
+          <Collapse in={sidebarPanelOpen} timeout="auto" unmountOnExit>
+            <Paper
+              id="user-account-menu"
+              elevation={8}
+              variant="outlined"
+              sx={(theme) => ({
+                mb: 1,
+                borderRadius: 1,
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+                boxShadow: theme.shadows[8],
+                overflow: 'hidden',
+              })}
+            >
+              <List dense disablePadding component="nav" aria-label="Account actions">
+                {user && user.id >= 0 ? (
+                  <ListItemButton
+                    component={RouterLink}
+                    to="/account/password"
+                    onClick={() => setSidebarPanelOpen(false)}
+                    aria-label="Change password"
+                    sx={
+                      menuCompact
+                        ? { justifyContent: 'center', px: 1, py: 1.25, minHeight: 48 }
+                        : { py: 1.25 }
+                    }
+                  >
+                    <ListItemIcon sx={menuCompact ? { minWidth: 0 } : undefined}>
+                      <LockOutlinedIcon fontSize="small" />
+                    </ListItemIcon>
+                    {menuCompact ? null : (
+                      <ListItemText
+                        primary="Change password"
+                        primaryTypographyProps={{ variant: 'body2' }}
+                      />
+                    )}
+                  </ListItemButton>
+                ) : null}
+                {user && user.id >= 0 ? (
+                  <ListItemButton
+                    onClick={() => {
+                      setSidebarPanelOpen(false);
+                      void logout();
+                    }}
+                    aria-label="Sign out"
+                    sx={
+                      menuCompact
+                        ? { justifyContent: 'center', px: 1, py: 1.25, minHeight: 48 }
+                        : { py: 1.25 }
+                    }
+                  >
+                    <ListItemIcon sx={menuCompact ? { minWidth: 0 } : undefined}>
+                      <LogoutOutlinedIcon fontSize="small" />
+                    </ListItemIcon>
+                    {menuCompact ? null : (
+                      <ListItemText primary="Sign out" primaryTypographyProps={{ variant: 'body2' }} />
+                    )}
+                  </ListItemButton>
+                ) : (
+                  <ListItemButton disabled sx={{ py: 1.25 }}>
+                    <ListItemText
+                      primary="Open access (no sign-in)"
+                      primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
+                    />
+                  </ListItemButton>
+                )}
+              </List>
+            </Paper>
+          </Collapse>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: sidebarShowLabel ? 1.5 : 0.5,
+              py: 1.25,
+              justifyContent: sidebarShowLabel ? 'flex-start' : 'center',
+              width: '100%',
+              minWidth: 0,
+            }}
           >
-            {avatar}
-          </IconButton>
-          {sidebarShowLabel ? (
-            <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0, fontWeight: 500 }}>
-              {user?.username ?? '—'}
-            </Typography>
-          ) : null}
+            <IconButton
+              onClick={() => setSidebarPanelOpen((o) => !o)}
+              aria-controls={sidebarPanelOpen ? 'user-account-menu' : undefined}
+              aria-haspopup="true"
+              aria-expanded={sidebarPanelOpen ? 'true' : undefined}
+              aria-label="Account menu"
+              size="small"
+              sx={{ p: 0.25, flexShrink: 0 }}
+            >
+              {avatar}
+            </IconButton>
+            {sidebarShowLabel ? (
+              <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0, fontWeight: 500 }}>
+                {user?.username ?? '—'}
+              </Typography>
+            ) : null}
+          </Box>
         </Box>
-        {menu}
-      </>
+      </ClickAwayListener>
     );
   }
 
@@ -140,16 +219,16 @@ export default function UserMenu({
     <>
       <IconButton
         onClick={(e) => setAnchorEl(e.currentTarget)}
-        aria-controls={open ? 'user-account-menu' : undefined}
+        aria-controls={toolbarOpen ? 'user-account-menu' : undefined}
         aria-haspopup="true"
-        aria-expanded={open ? 'true' : undefined}
+        aria-expanded={toolbarOpen ? 'true' : undefined}
         aria-label="Account menu"
         size="small"
         sx={{ p: 0.5 }}
       >
         {avatar}
       </IconButton>
-      {menu}
+      {toolbarMenu}
     </>
   );
 }

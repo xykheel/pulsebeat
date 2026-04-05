@@ -468,6 +468,19 @@ export function getHeartbeats(monitorId: number, limit = 500): HeartbeatRow[] {
     .all(monitorId, limit) as HeartbeatRow[];
 }
 
+export function getHeartbeatsInRange(
+  monitorId: number,
+  fromMs: number,
+  toMs: number,
+  limit = 5000
+): HeartbeatRow[] {
+  return db
+    .prepare(
+      `SELECT * FROM heartbeats WHERE monitor_id = ? AND checked_at >= ? AND checked_at <= ? ORDER BY checked_at DESC LIMIT ?`
+    )
+    .all(monitorId, fromMs, toMs, limit) as HeartbeatRow[];
+}
+
 export function getLatestHeartbeat(monitorId: number): HeartbeatRow | undefined {
   return db
     .prepare(
@@ -514,6 +527,22 @@ export function getIncidents(monitorId: number, limit = 100): IncidentRow[] {
       `SELECT * FROM incidents WHERE monitor_id = ? ORDER BY started_at DESC LIMIT ?`
     )
     .all(monitorId, limit) as IncidentRow[];
+}
+
+/** Incidents that overlap the window [fromMs, toMs] (inclusive). */
+export function getIncidentsOverlappingRange(
+  monitorId: number,
+  fromMs: number,
+  toMs: number,
+  limit = 200
+): IncidentRow[] {
+  return db
+    .prepare(
+      `SELECT * FROM incidents WHERE monitor_id = ?
+       AND started_at <= ? AND (resolved_at IS NULL OR resolved_at >= ?)
+       ORDER BY started_at DESC LIMIT ?`
+    )
+    .all(monitorId, toMs, fromMs, limit) as IncidentRow[];
 }
 
 export function listNotifications(): NotificationWithConfig[] {

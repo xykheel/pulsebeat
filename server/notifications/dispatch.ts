@@ -1,14 +1,43 @@
 import { getEnabledNotificationsForMonitor, getNotification, type MonitorRow } from '../db.js';
 import { dispatchNotification, type NotificationConfig } from './providers.js';
 
+function formatAlertTime(): string {
+  return new Date().toLocaleString('en-AU', {
+    timeZone: 'Australia/Sydney',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatDetailForBody(detail: string | undefined): string | null {
+  if (!detail?.trim()) return null;
+  const parts = detail.split(/\s*·\s*/).map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 1) {
+    return `Detail: ${detail.trim()}`;
+  }
+  const lines = parts.map((p) => {
+    const lower = p.toLowerCase();
+    if (/^https?:\s/i.test(p) || /^http\s+\d/.test(lower)) return `📶 ${p}`;
+    if (lower.includes('tls')) return `🔒 ${p}`;
+    if (lower.startsWith('cn ') || lower.includes(' subject')) return `📇 ${p}`;
+    if (lower.includes('expir')) return `📅 ${p}`;
+    return `▸ ${p}`;
+  });
+  return `Detail:\n${lines.join('\n')}`;
+}
+
 function buildLines(monitor: MonitorRow, event: 'down' | 'up', detail: string | undefined): { title: string; body: string } {
   const status = event === 'down' ? 'DOWN' : 'UP';
   const body = [
     `Monitor: ${monitor.name}`,
     `Type: ${monitor.type.toUpperCase()}`,
     `Target: ${monitor.url}`,
-    detail ? `Detail: ${detail}` : null,
-    `Time: ${new Date().toISOString()}`,
+    formatDetailForBody(detail),
+    `Time: ${formatAlertTime()}`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -35,8 +64,8 @@ export async function notifySslAlert(monitor: MonitorRow, detail: string): Promi
     `Monitor: ${monitor.name}`,
     `Type: ${monitor.type.toUpperCase()}`,
     `Target: ${monitor.url}`,
-    `Detail: ${detail}`,
-    `Time: ${new Date().toISOString()}`,
+    formatDetailForBody(detail) ?? `Detail: ${detail}`,
+    `Time: ${formatAlertTime()}`,
   ].join('\n');
   const list = getEnabledNotificationsForMonitor(monitor.id);
   return Promise.allSettled(

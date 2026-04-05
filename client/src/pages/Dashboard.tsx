@@ -25,6 +25,7 @@ import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import BuildIcon from '@mui/icons-material/Build';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { Link as RouterLink } from 'react-router-dom';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
@@ -64,6 +65,7 @@ export default function Dashboard() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
   const [pauseBusyId, setPauseBusyId] = useState<number | null>(null);
+  const [refreshBusyId, setRefreshBusyId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (document.visibilityState !== 'visible') return;
@@ -142,6 +144,21 @@ export default function Dashboard() {
       /* keep UI; next poll may refresh */
     } finally {
       setPauseBusyId(null);
+    }
+  }
+
+  async function refreshMonitorRow(m: EnrichedMonitor) {
+    if (refreshBusyId != null) return;
+    setRefreshBusyId(m.id);
+    try {
+      const updated = await apiSend<EnrichedMonitor>(`/api/monitors/${m.id}/check`, 'POST');
+      if (updated) {
+        setMonitors((prev) => prev.map((x) => (x.id === m.id ? updated : x)));
+      }
+    } catch {
+      await load();
+    } finally {
+      setRefreshBusyId(null);
     }
   }
 
@@ -372,6 +389,18 @@ export default function Dashboard() {
                                 ) : (
                                   <PlayArrowIcon fontSize="small" />
                                 )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Check now">
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label="Check monitor now"
+                                disabled={refreshBusyId === m.id}
+                                onClick={() => void refreshMonitorRow(m)}
+                              >
+                                <RefreshIcon fontSize="small" />
                               </IconButton>
                             </span>
                           </Tooltip>
