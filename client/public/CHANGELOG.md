@@ -1,6 +1,15 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.9.0
+
+### What’s new
+
+- **Security (CSP)** — The app sets a fresh **Content-Security-Policy** nonce on each HTML response and applies it to bootstrap `<script>` tags in `index.html`, so inline/module scripts can run without relaxing `script-src` to `'unsafe-inline'`. API responses keep the same connect-src and origin rules as before.
+- **Monitor detail** — The **response time** chart uses **MUI X Charts** (`LineChart`) with **DM Sans** axis labels to match the rest of the UI.
+- **SSL / TLS health** — The panel title includes a **shield** icon whose colour reflects overall certificate health (neutral when there is no data, green / amber / red when there is).
+- **Dashboard** — The monitors table shows **only the first tag** per row (hover the chip to see other tag names when present). A **pause** control next to **edit** toggles the monitor **active** state; when paused it becomes a **play** control to resume.
+
 ## 1.8.2
 
 ### For administrators

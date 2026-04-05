@@ -1,4 +1,5 @@
 import { getPasswordProtectionEnabled } from './db.js';
+import crypto from 'crypto';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -35,6 +36,22 @@ function resolveStaticDir(): string | null {
   return null;
 }
 
+/** 128-bit nonce, base64 (CSP nonces should be unguessable; paired with injected `nonce` on `<script>` in SPA shell). */
+function cspNonceMiddleware(_req: Request, res: Response, next: NextFunction): void {
+  res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
+  next();
+}
+
+function readIndexHtml(staticDir: string): string {
+  return fs.readFileSync(path.join(staticDir, 'index.html'), 'utf8');
+}
+
+/** Add `nonce` to `<script>` open tags so `script-src` can allow the SPA bootstrap without `'unsafe-inline'`. */
+function injectScriptNonces(html: string, nonce: string): string {
+  return html.replace(/<script(\s)(?![^>]*\bnonce=)/gi, `<script nonce="${nonce}"$1`);
+}
+
+app.use(cspNonceMiddleware);
 app.use(corsSafelistMiddleware);
 app.use(helmet(buildHelmetOptions()));
 app.use(compression());
@@ -72,7 +89,8 @@ if (staticDir) {
   app.use(express.static(staticDir, { index: false, maxAge: '1d' }));
   app.get('*', (req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(staticDir, 'index.html'));
+    const html = injectScriptNonces(readIndexHtml(staticDir), res.locals.cspNonce);
+    res.type('html').send(html);
   });
 }
 

@@ -23,9 +23,12 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import BuildIcon from '@mui/icons-material/Build';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { Link as RouterLink } from 'react-router-dom';
 import IconButton from '@mui/material/IconButton';
-import { apiGet } from '../api';
+import Tooltip from '@mui/material/Tooltip';
+import { apiGet, apiSend } from '../api';
 import DashboardStatCards from '../components/DashboardStatCards';
 import MonitorFormDialog from '../components/MonitorFormDialog';
 import MonitorLatencyBars from '../components/MonitorLatencyBars';
@@ -60,6 +63,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
+  const [pauseBusyId, setPauseBusyId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (document.visibilityState !== 'visible') return;
@@ -126,6 +130,19 @@ export default function Dashboard() {
   function openEdit(m: EnrichedMonitor) {
     setEditMonitor(m);
     setDialogOpen(true);
+  }
+
+  async function toggleMonitorActive(m: EnrichedMonitor) {
+    if (pauseBusyId != null) return;
+    setPauseBusyId(m.id);
+    try {
+      await apiSend(`/api/monitors/${m.id}`, 'PUT', { active: m.active ? 0 : 1 });
+      await load();
+    } catch {
+      /* keep UI; next poll may refresh */
+    } finally {
+      setPauseBusyId(null);
+    }
   }
 
   const displayName = user?.username?.trim() || 'there';
@@ -315,25 +332,49 @@ export default function Dashboard() {
                         <TableCell sx={{ typography: 'caption', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                           {m.type}
                         </TableCell>
-                        <TableCell>
-                          <Box className="flex flex-wrap gap-0.5">
-                            {m.tags.map((t) => (
-                              <Chip
-                                key={t.id}
-                                label={t.name}
-                                size="small"
-                                sx={{
-                                  height: 22,
-                                  fontSize: '0.7rem',
-                                  bgcolor: `${t.color}33`,
-                                  border: '1px solid',
-                                  borderColor: `${t.color}55`,
-                                }}
-                              />
-                            ))}
-                          </Box>
+                        <TableCell sx={{ maxWidth: 160, verticalAlign: 'middle' }}>
+                          {m.tags[0] ? (
+                            <Chip
+                              label={m.tags[0].name}
+                              size="small"
+                              title={
+                                m.tags.length > 1
+                                  ? m.tags.map((t) => t.name).join(', ')
+                                  : undefined
+                              }
+                              sx={{
+                                height: 22,
+                                maxWidth: '100%',
+                                fontSize: '0.7rem',
+                                bgcolor: `${m.tags[0].color}33`,
+                                border: '1px solid',
+                                borderColor: `${m.tags[0].color}55`,
+                                '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+                              }}
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              —
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell align="right">
+                          <Tooltip title={m.active ? 'Pause monitor' : 'Resume monitor'}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label={m.active ? 'Pause monitor' : 'Resume monitor'}
+                                disabled={pauseBusyId === m.id}
+                                onClick={() => void toggleMonitorActive(m)}
+                              >
+                                {m.active ? (
+                                  <PauseIcon fontSize="small" />
+                                ) : (
+                                  <PlayArrowIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                           <IconButton size="small" aria-label="Edit monitor" onClick={() => openEdit(m)}>
                             <SettingsOutlinedIcon fontSize="small" />
                           </IconButton>

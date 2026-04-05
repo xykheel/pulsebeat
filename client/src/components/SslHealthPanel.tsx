@@ -1,5 +1,6 @@
-import { Box, Grid, Table, TableBody, TableCell, TableRow, Typography } from '@mui/material';
+import { Box, Grid, Stack, Table, TableBody, TableCell, TableRow, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import ShieldIcon from '@mui/icons-material/Shield';
 import GlassCard from './GlassCard';
 import type { SslCheckRow } from '../types';
 
@@ -8,6 +9,35 @@ function tlsRank(v: string | null | undefined): number {
   if (v.includes('1.3')) return 3;
   if (v.includes('1.2')) return 2;
   return 1;
+}
+
+type ShieldLevel = 'neutral' | 'ok' | 'warn' | 'error';
+
+function sslShieldLevel(
+  latest: SslCheckRow,
+  expired: boolean,
+  trustOk: boolean,
+  daysRemaining: number | null
+): ShieldLevel {
+  if (expired || latest.status !== 1) return 'error';
+  if (!trustOk) return 'error';
+  if (daysRemaining != null && daysRemaining <= 7) return 'error';
+  if (daysRemaining != null && daysRemaining <= 30) return 'warn';
+  if (tlsRank(latest.tls_version) < 2) return 'warn';
+  return 'ok';
+}
+
+function shieldSx(level: ShieldLevel) {
+  switch (level) {
+    case 'ok':
+      return { color: 'success.main' };
+    case 'warn':
+      return { color: 'warning.main' };
+    case 'error':
+      return { color: 'error.main' };
+    default:
+      return { color: 'text.secondary' };
+  }
 }
 
 export default function SslHealthPanel({
@@ -21,9 +51,12 @@ export default function SslHealthPanel({
   if (!latest) {
     return (
       <GlassCard sx={{ p: 2.5 }}>
-        <Typography variant="h6" gutterBottom>
-          SSL / TLS health
-        </Typography>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+          <ShieldIcon sx={{ fontSize: 28, ...shieldSx('neutral') }} aria-hidden />
+          <Typography variant="h6" component="h2" sx={{ m: 0 }}>
+            SSL / TLS health
+          </Typography>
+        </Stack>
         <Typography variant="body2" color="text.secondary">
           No TLS validation data yet. Enable “Validate TLS certificate” for this HTTPS monitor.
         </Typography>
@@ -43,6 +76,7 @@ export default function SslHealthPanel({
   const tlsColour =
     tlsRank(latest.tls_version) >= 3 ? 'success.main' : tlsRank(latest.tls_version) >= 2 ? 'warning.main' : 'error.main';
   const trustOk = latest.chain_fully_trusted === 1;
+  const shieldLevel = sslShieldLevel(latest, expired, trustOk, dr);
   const timelineSpan =
     validFrom != null && validTo != null && validTo > validFrom ? validTo - validFrom : 0;
   const markerPct =
@@ -76,9 +110,12 @@ export default function SslHealthPanel({
 
   return (
     <GlassCard sx={{ p: 2.5 }}>
-      <Typography variant="h6" gutterBottom>
-        SSL / TLS health
-      </Typography>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <ShieldIcon sx={{ fontSize: 28, ...shieldSx(shieldLevel) }} aria-hidden />
+        <Typography variant="h6" component="h2" sx={{ m: 0 }}>
+          SSL / TLS health
+        </Typography>
+      </Stack>
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid item xs={6} sm={3}>

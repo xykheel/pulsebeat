@@ -68,13 +68,21 @@ export function buildHelmetOptions(): HelmetOptions {
   const connectSrc = Array.from(new Set<string>(["'self'", ...extraConnect]));
   return {
     contentSecurityPolicy: {
+      useDefaults: false,
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          (_req, res) => {
+            const r = res as Response;
+            return `'nonce-${r.locals.cspNonce}'`;
+          },
+        ],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:'],
         connectSrc,
+        objectSrc: ["'none'"],
       },
     },
     crossOriginEmbedderPolicy: false,
