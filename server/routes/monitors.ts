@@ -6,7 +6,9 @@ import {
   updateMonitor,
   deleteMonitor,
   getHeartbeats,
+  getHeartbeatsInRange,
   getIncidents,
+  getIncidentsOverlappingRange,
   getLatestHeartbeat,
   getMonitorNotificationIds,
   uptimePercent,
@@ -23,7 +25,7 @@ import {
   type TagRow,
   type CheckBarPoint,
 } from '../db.js';
-import { scheduleMonitor, clearMonitorSchedule } from '../checker.js';
+import { scheduleMonitor, clearMonitorSchedule, checkMonitorNow } from '../checker.js';
 import { isMonitorInActiveMaintenance } from '../maintenance.js';
 
 const router = Router();
@@ -239,8 +241,14 @@ router.get('/:id/heartbeats', (req: Request, res: Response) => {
   if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
   if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
   const limit = Math.min(5000, Math.max(1, Number(req.query.limit) || 500));
+  const fromMs = Number(req.query.from);
+  const toMs = Number(req.query.to);
   try {
-    res.json(getHeartbeats(id, limit));
+    if (Number.isFinite(fromMs) && Number.isFinite(toMs) && fromMs <= toMs) {
+      res.json(getHeartbeatsInRange(id, fromMs, toMs, limit));
+    } else {
+      res.json(getHeartbeats(id, limit));
+    }
   } catch {
     res.status(500).json({ error: 'Failed to load heartbeats' });
   }
@@ -251,10 +259,30 @@ router.get('/:id/incidents', (req: Request, res: Response) => {
   if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
   if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const fromMs = Number(req.query.from);
+  const toMs = Number(req.query.to);
   try {
-    res.json(getIncidents(id, limit));
+    if (Number.isFinite(fromMs) && Number.isFinite(toMs) && fromMs <= toMs) {
+      res.json(getIncidentsOverlappingRange(id, fromMs, toMs, Math.min(500, limit)));
+    } else {
+      res.json(getIncidents(id, limit));
+    }
   } catch {
     res.status(500).json({ error: 'Failed to load incidents' });
+  }
+});
+
+router.post('/:id/check', async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
+  if (!getMonitor(id)) return res.status(404).json({ error: 'Not found' });
+  try {
+    await checkMonitorNow(id);
+    const m = getMonitor(id);
+    if (!m) return res.status(404).json({ error: 'Not found' });
+    res.json(enrichMonitor(m));
+  } catch {
+    res.status(500).json({ error: 'Check failed' });
   }
 });
 

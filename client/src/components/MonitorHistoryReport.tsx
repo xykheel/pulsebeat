@@ -1,0 +1,430 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Grid,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
+import { BarChart } from '@mui/x-charts/BarChart';
+import { PieChart } from '@mui/x-charts/PieChart';
+import { apiGet } from '../api';
+import ResponseTimeChart from './ResponseTimeChart';
+import type { HeartbeatPoint, IncidentRow } from '../types';
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function startOfDayMs(ymdStr: string): number {
+  const [y, m, d] = ymdStr.split('-').map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+}
+
+function endOfDayMs(ymdStr: string): number {
+  const [y, m, d] = ymdStr.split('-').map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+}
+
+export default function MonitorHistoryReport({ monitorId }: { monitorId: number }) {
+  const theme = useTheme();
+  const muted = theme.palette.text.muted;
+  const fontSans = theme.typography.fontFamily;
+  const tickLabelStyle = { fontFamily: fontSans, fontSize: 11, fill: muted };
+  /** Match `ResponseTimeChart` area fill — softer on OLED than solid series colours. */
+  const chartFillOpacity = theme.palette.chart.fillStartOpacity;
+  const upFill = alpha(theme.palette.success.main, chartFillOpacity);
+  const downFill = alpha(theme.palette.error.main, chartFillOpacity);
+
+  const [toYmd, setToYmd] = useState(() => ymd(new Date()));
+  const [fromYmd, setFromYmd] = useState(() => {
+    const t = new Date();
+    t.setDate(t.getDate() - 7);
+    return ymd(t);
+  });
+  const [heartbeats, setHeartbeats] = useState<HeartbeatPoint[]>([]);
+  const [incidents, setIncidents] = useState<IncidentRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fromMs = startOfDayMs(fromYmd);
+  const toMs = endOfDayMs(toYmd);
+
+  const loadRange = useCallback(async () => {
+    if (fromMs > toMs) {
+      setError('Start date must be on or before end date.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const q = `from=${fromMs}&to=${toMs}&limit=5000`;
+      const [h, inc] = await Promise.all([
+        apiGet<HeartbeatPoint[]>(`/api/monitors/${monitorId}/heartbeats?${q}`),
+        apiGet<IncidentRow[]>(`/api/monitors/${monitorId}/incidents?${q}&limit=200`),
+      ]);
+      setHeartbeats(h);
+      setIncidents(inc);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load history');
+    } finally {
+      setLoading(false);
+    }
+  }, [monitorId, fromMs, toMs]);
+
+  useEffect(() => {
+    void loadRange();
+  }, [loadRange]);
+
+  const stats = useMemo(() => {
+    const up = heartbeats.filter((p) => p.status === 1).length;
+    const down = heartbeats.filter((p) => p.status !== 1).length;
+    const total = up + down;
+    const pct = total ? (up / total) * 100 : null;
+    const latencies = heartbeats.filter((p) => p.status === 1 && p.latency_ms != null).map((p) => p.latency_ms!);
+    const avgLat =
+      latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
+    return { up, down, total, pct, avgLat };
+  }, [heartbeats]);
+
+  const byDay = useMemo(() => {
+    const map = new Map<string, { up: number; down: number }>();
+    for (const p of heartbeats) {
+      const day = new Date(p.checked_at).toLocaleDateString('en-AU', {
+        timeZone: 'Australia/Sydney',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const cur = map.get(day) ?? { up: 0, down: 0 };
+      if (p.status === 1) cur.up += 1;
+      else cur.down += 1;
+      map.set(day, cur);
+    }
+    const keys = [...map.keys()].sort((a, b) => {
+      const [da, ma, ya] = a.split('/').map(Number);
+      const [db, mb, yb] = b.split('/').map(Number);
+      return new Date(ya, ma - 1, da).getTime() - new Date(yb, mb - 1, db).getTime();
+    });
+    return {
+      labels: keys,
+      up: keys.map((k) => map.get(k)!.up),
+      down: keys.map((k) => map.get(k)!.down),
+    };
+  }, [heartbeats]);
+
+  const linePoints = useMemo(() => [...heartbeats].reverse(), [heartbeats]);
+
+  function setPreset(days: number) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+    setFromYmd(ymd(start));
+    setToYmd(ymd(end));
+  }
+
+  return (
+    <Stack spacing={2.5}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 2,
+          alignItems: 'flex-end',
+        }}
+      >
+        <TextField
+          label="From"
+          type="date"
+          size="small"
+          value={fromYmd}
+          onChange={(e) => setFromYmd(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 160 }}
+        />
+        <TextField
+          label="To"
+          type="date"
+          size="small"
+          value={toYmd}
+          onChange={(e) => setToYmd(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 160 }}
+        />
+        <Button variant="outlined" size="small" onClick={() => void loadRange()} disabled={loading}>
+          Apply range
+        </Button>
+        <Button variant="text" size="small" onClick={() => setPreset(7)}>
+          Last 7 days
+        </Button>
+        <Button variant="text" size="small" onClick={() => setPreset(30)}>
+          Last 30 days
+        </Button>
+        <Button variant="text" size="small" onClick={() => setPreset(90)}>
+          Last 90 days
+        </Button>
+      </Box>
+
+      {error ? (
+        <Alert severity="error" onClose={() => setError('')}>
+          {error}
+        </Alert>
+      ) : null}
+
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
+            <Typography variant="caption" color="text.secondary">
+              Checks in range
+            </Typography>
+            <Typography variant="h5">{stats.total}</Typography>
+          </Box>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
+            <Typography variant="caption" color="text.secondary">
+              Uptime (checks)
+            </Typography>
+            <Typography variant="h5">{stats.pct != null ? `${stats.pct.toFixed(1)}%` : '—'}</Typography>
+          </Box>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
+            <Typography variant="caption" color="text.secondary">
+              Avg latency (up checks)
+            </Typography>
+            <Typography variant="h5">{stats.avgLat != null ? `${stats.avgLat} ms` : '—'}</Typography>
+          </Box>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
+            <Typography variant="caption" color="text.secondary">
+              Incidents (overlapping range)
+            </Typography>
+            <Typography variant="h5">{incidents.length}</Typography>
+          </Box>
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={5}>
+          <Typography variant="subtitle2" gutterBottom>
+            Outcomes
+          </Typography>
+          {stats.total === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+              No checks in this range
+            </Typography>
+          ) : (
+            <Stack spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
+              <PieChart
+                series={[
+                  {
+                    data: [
+                      { id: 'up', value: stats.up, label: 'Up', color: upFill },
+                      { id: 'down', value: stats.down, label: 'Down', color: downFill },
+                    ],
+                    highlightScope: { faded: 'global', highlighted: 'item' },
+                  },
+                ]}
+                width={300}
+                height={200}
+                margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                slotProps={{
+                  legend: { hidden: true },
+                }}
+                sx={{
+                  '& .MuiPieArc-root': {
+                    stroke: theme.palette.divider,
+                    strokeWidth: 1,
+                  },
+                }}
+              />
+              <Stack direction="row" spacing={2.5} flexWrap="wrap" justifyContent="center" useFlexGap>
+                <Stack direction="row" alignItems="center" spacing={0.75}>
+                  <Box
+                    sx={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 0.5,
+                      bgcolor: upFill,
+                      border: 1,
+                      borderColor: 'divider',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Up ({stats.up})
+                  </Typography>
+                </Stack>
+                <Stack direction="row" alignItems="center" spacing={0.75}>
+                  <Box
+                    sx={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 0.5,
+                      bgcolor: downFill,
+                      border: 1,
+                      borderColor: 'divider',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Down ({stats.down})
+                  </Typography>
+                </Stack>
+              </Stack>
+            </Stack>
+          )}
+        </Grid>
+        <Grid item xs={12} md={7}>
+          <Typography variant="subtitle2" gutterBottom>
+            Checks per day (Sydney)
+          </Typography>
+          {byDay.labels.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 4 }}>
+              No daily breakdown
+            </Typography>
+          ) : (
+            <Stack spacing={1.25} alignItems="center" sx={{ width: '100%' }}>
+              <Box sx={{ width: '100%', overflowX: 'auto' }}>
+                <BarChart
+                  height={260}
+                  margin={{ left: 48, right: 16, top: 8, bottom: 56 }}
+                  xAxis={[
+                    {
+                      scaleType: 'band',
+                      data: byDay.labels,
+                      tickLabelStyle: { ...tickLabelStyle, angle: -35, textAnchor: 'end' },
+                    },
+                  ]}
+                  yAxis={[{ tickLabelStyle, stroke: muted }]}
+                  series={[
+                    {
+                      type: 'bar',
+                      data: byDay.up,
+                      label: 'Up',
+                      color: upFill,
+                      stack: 'd',
+                    },
+                    {
+                      type: 'bar',
+                      data: byDay.down,
+                      label: 'Down',
+                      color: downFill,
+                      stack: 'd',
+                    },
+                  ]}
+                  slotProps={{
+                    legend: { hidden: true },
+                  }}
+                  sx={{
+                    '& .MuiBarElement-root': {
+                      stroke: theme.palette.divider,
+                      strokeWidth: 1,
+                    },
+                  }}
+                />
+              </Box>
+              <Stack direction="row" spacing={2.5} flexWrap="wrap" justifyContent="center" useFlexGap>
+                <Stack direction="row" alignItems="center" spacing={0.75}>
+                  <Box
+                    sx={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 0.5,
+                      bgcolor: upFill,
+                      border: 1,
+                      borderColor: 'divider',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Up ({stats.up})
+                  </Typography>
+                </Stack>
+                <Stack direction="row" alignItems="center" spacing={0.75}>
+                  <Box
+                    sx={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 0.5,
+                      bgcolor: downFill,
+                      border: 1,
+                      borderColor: 'divider',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Down ({stats.down})
+                  </Typography>
+                </Stack>
+              </Stack>
+            </Stack>
+          )}
+        </Grid>
+      </Grid>
+
+      <Box>
+        <Typography variant="subtitle2" gutterBottom>
+          Response time
+        </Typography>
+        <ResponseTimeChart points={linePoints} height={240} />
+      </Box>
+
+      <Box>
+        <Typography variant="subtitle2" gutterBottom>
+          Incident log (overlapping range)
+        </Typography>
+        {!incidents.length ? (
+          <Typography color="text.secondary">No incidents in this range</Typography>
+        ) : (
+          <TableContainer sx={{ maxHeight: 320 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Started</TableCell>
+                  <TableCell>Resolved</TableCell>
+                  <TableCell>Duration</TableCell>
+                  <TableCell>Cause</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {incidents.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell sx={{ typography: 'dataSmall', whiteSpace: 'nowrap' }}>
+                      {new Date(row.started_at).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })}
+                    </TableCell>
+                    <TableCell sx={{ typography: 'dataSmall', whiteSpace: 'nowrap' }}>
+                      {row.resolved_at
+                        ? new Date(row.resolved_at).toLocaleString('en-AU', {
+                            timeZone: 'Australia/Sydney',
+                          })
+                        : '—'}
+                    </TableCell>
+                    <TableCell sx={{ typography: 'data' }}>
+                      {row.duration_sec != null ? `${row.duration_sec}s` : '—'}
+                    </TableCell>
+                    <TableCell>{row.cause || '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Box>
+    </Stack>
+  );
+}

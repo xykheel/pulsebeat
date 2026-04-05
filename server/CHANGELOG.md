@@ -1,6 +1,29 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.10.1
+
+### What’s changed
+
+- **Monitor history** — The **checks per day** bar chart legend sits **below** the plot (same treatment as the outcomes pie), so it no longer overlaps tall bars.
+- **Monitor history** — **Outcomes** pie and **checks per day** bars use the same **semi-transparent fill** as the response-time chart area (theme fill opacity), with light segment outlines so shapes stay readable on dark backgrounds.
+- **Sidebar** — The **account menu** from your avatar stays **inside the sidebar** on **mobile and desktop** (no portal over the main column). On the **collapsed** desktop rail, actions are **icon-only** so they fit the narrow width.
+- **Sidebar** — Account actions use an **inline panel** (collapse + bordered paper) above the avatar so the menu reads as a proper control, not floating list rows.
+
+## 1.10.0
+
+### What’s new
+
+- **Mobile sidebar** — The **logo** opens the **dashboard**; the app name beside it is plain text (not a separate link). The **account menu** opened from your avatar stays **inside the drawer** instead of portaling over the dimmed overlay.
+- **Monitor detail** — **Live** and **History** tabs: Live keeps the existing view; History adds a **report-style** layout with a **date range**, summary tiles, **MUI X Charts** (**pie** for up/down mix, **stacked bars** for daily checks, **line** for response times), and an **incident table** for the selected window. The API supports **`from` / `to`** (millisecond bounds) on heartbeats and incidents.
+- **Dashboard** — **Check now** (**refresh** icon) next to pause runs an immediate check for that monitor and updates the row.
+- **Webhook notifications** — Alert **time** uses **en-AU** formatting in **Australia/Sydney** (e.g. **dd/mm/yyyy HH:mm**). **Detail** lines are split into clearer, icon-prefixed lines when the payload uses **·** separators.
+
+### What’s changed (polish)
+
+- **Monitor history** — The **outcomes** pie chart uses a **legend below** the graphic (the built-in legend no longer overlaps the pie).
+- **Theme** — **Online / success** green is **muted** for OLED and long sessions; status dots, chips, charts, and latency strips pick it up via the shared design tokens.
+
 ## 1.9.0
 
 ### What’s new

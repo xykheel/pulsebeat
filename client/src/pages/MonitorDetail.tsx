@@ -12,12 +12,14 @@ import {
   Grid,
   IconButton,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
   TableContainer,
+  Tabs,
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -33,6 +35,7 @@ import UptimeBar90 from '../components/UptimeBar90';
 import Sparkline from '../components/Sparkline';
 import MonitorFormDialog from '../components/MonitorFormDialog';
 import SslHealthPanel from '../components/SslHealthPanel';
+import MonitorHistoryReport from '../components/MonitorHistoryReport';
 import type {
   DnsConfig,
   EnrichedMonitor,
@@ -57,6 +60,7 @@ export default function MonitorDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
   const [error, setError] = useState('');
+  const [detailTab, setDetailTab] = useState(0);
 
   const load = useCallback(async () => {
     if (!id || document.visibilityState !== 'visible') return;
@@ -97,6 +101,10 @@ export default function MonitorDetail() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setDetailTab(0);
+  }, [id]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -189,6 +197,29 @@ export default function MonitorDetail() {
         </Alert>
       ) : null}
 
+      <Tabs
+        value={detailTab}
+        onChange={(_, v) => setDetailTab(v)}
+        sx={{ mb: 2 }}
+        aria-label="Monitor detail views"
+      >
+        <Tab label="Live" id="monitor-tab-live" aria-controls="monitor-panel-live" />
+        <Tab label="History" id="monitor-tab-history" aria-controls="monitor-panel-history" />
+      </Tabs>
+
+      {detailTab === 1 ? (
+        <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Typography variant="h6" gutterBottom>
+            Historical report
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Choose a date range to review retained checks, uptime mix, response times, and incidents.
+          </Typography>
+          <MonitorHistoryReport monitorId={monitor.id} />
+        </GlassCard>
+      ) : null}
+
+      {detailTab === 0 ? (
       <Stack spacing={2.5}>
         <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Grid container spacing={3}>
@@ -519,6 +550,7 @@ export default function MonitorDetail() {
           )}
         </GlassCard>
       </Stack>
+      ) : null}
 
       <MonitorFormDialog
         open={editOpen}

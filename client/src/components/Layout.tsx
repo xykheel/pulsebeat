@@ -123,6 +123,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       bgcolor: 'background.paper',
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
+      overflow: 'visible',
     }),
     [theme.palette.divider, theme.palette.background.paper]
   );
@@ -212,10 +213,18 @@ export default function Layout({ children }: { children: ReactNode }) {
         justifyContent: opts.collapsed ? 'center' : 'flex-start',
       }}
     >
-      <SsidChartIcon className="h-8 w-8 shrink-0 text-pb-primary" sx={{ fontSize: '2rem' }} aria-hidden />
+      <IconButton
+        component={RouterLink}
+        to="/"
+        aria-label="Dashboard"
+        size="small"
+        sx={{ p: 0.5, color: 'primary.main', flexShrink: 0 }}
+      >
+        <SsidChartIcon className="text-pb-primary" sx={{ fontSize: '2rem' }} aria-hidden />
+      </IconButton>
       {!opts.collapsed ? (
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="subtitle1" component={RouterLink} to="/" noWrap className="font-bold no-underline text-inherit block">
+          <Typography variant="subtitle1" noWrap className="font-bold" component="p" sx={{ m: 0 }}>
             Pulsebeat
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.9 }}>
@@ -262,8 +271,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           {collapsed ? <ChevronRightIcon sx={{ fontSize: 18 }} /> : <ChevronLeftIcon sx={{ fontSize: 18 }} />}
         </IconButton>
       </Box>
-      <Box sx={{ borderTop: 1, borderColor: 'divider', flexShrink: 0 }}>
-        <UserMenu variant="sidebar" sidebarShowLabel={!collapsed} />
+      <Box sx={{ borderTop: 1, borderColor: 'divider', flexShrink: 0, position: 'relative', zIndex: 2 }}>
+        <UserMenu variant="sidebar" sidebarShowLabel={!collapsed} sidebarCollapsed={collapsed} />
       </Box>
     </>
   );
@@ -274,7 +283,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {navList({ collapsed: false, onNavigate: closeMobileDrawer })}
       </Box>
-      <Box sx={{ borderTop: 1, borderColor: 'divider', flexShrink: 0 }}>
+      <Box sx={{ borderTop: 1, borderColor: 'divider', flexShrink: 0, position: 'relative', zIndex: 2 }}>
         <UserMenu variant="sidebar" sidebarShowLabel />
       </Box>
     </Box>
@@ -303,7 +312,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           borderRight: 1,
           borderColor: 'divider',
           bgcolor: 'background.paper',
-          overflow: 'hidden',
+          overflow: 'visible',
           zIndex: theme.zIndex.drawer,
         }}
       >
