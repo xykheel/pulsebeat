@@ -36,6 +36,21 @@ export interface AboutInfo {
   github_url: string | null;
 }
 
+export interface ContainerMetricsPayload {
+  source: 'cgroup_v2' | 'cgroup_v1_memory' | 'process';
+  cpu_percent: number | null;
+  memory_bytes: number | null;
+  memory_limit_bytes: number | null;
+  memory_percent: number | null;
+  net_rx_bytes: number | null;
+  net_tx_bytes: number | null;
+  block_read_bytes: number | null;
+  block_write_bytes: number | null;
+  pids: number | null;
+  pids_max: number | null;
+  sampled_at_ms: number;
+}
+
 export interface EnrichedMonitor {
   id: number;
   name: string;

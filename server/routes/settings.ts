@@ -9,6 +9,7 @@ import {
   updateUserPasswordHash,
 } from '../db.js';
 import { readAppInfo } from '../readAppInfo.js';
+import { getContainerMetrics } from '../containerMetrics.js';
 
 const router = Router();
 
@@ -127,6 +128,14 @@ router.get('/about', (_req: Request, res: Response) => {
     });
   } catch {
     res.status(500).json({ error: 'Failed to load about information' });
+  }
+});
+
+router.get('/container-stats', (_req: Request, res: Response) => {
+  try {
+    res.json(getContainerMetrics());
+  } catch {
+    res.status(500).json({ error: 'Failed to read container metrics' });
   }
 });
 

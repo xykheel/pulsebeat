@@ -38,6 +38,7 @@ export default function MonitorCard({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'flex-start',
         minWidth: 0,
       }}
     >
@@ -104,16 +105,31 @@ export default function MonitorCard({
       </Stack>
 
       <Box
-        mt={2}
-        display="flex"
-        flexDirection={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', sm: 'flex-end' }}
-        gap={{ xs: 2, sm: 1 }}
-        flexGrow={1}
+        sx={{
+          mt: 1.75,
+          pt: 1.75,
+          borderTop: 1,
+          borderColor: 'divider',
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'stretch', sm: 'flex-end' },
+          gap: { xs: 2, sm: 2.5 },
+        }}
       >
-        <Box sx={{ minWidth: 0, flex: { sm: '1 1 auto' } }}>
-          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+        <Box sx={{ minWidth: 0, flex: '1 1 0%' }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            component="p"
+            sx={{
+              m: 0,
+              mb: 0.75,
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontSize: '0.65rem',
+            }}
+          >
             90-day uptime
           </Typography>
           <Box sx={horizontalScrollThinSx()}>
@@ -121,13 +137,36 @@ export default function MonitorCard({
           </Box>
         </Box>
         <Box
-          textAlign={{ xs: 'left', sm: 'right' }}
-          sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'auto' } }}
+          sx={{
+            flexShrink: 0,
+            width: { xs: '100%', sm: 'auto' },
+            minWidth: { sm: 128 },
+          }}
         >
-          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            component="p"
+            sx={{
+              m: 0,
+              mb: 0.75,
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontSize: '0.65rem',
+              textAlign: { xs: 'left', sm: 'right' },
+            }}
+          >
             Response
           </Typography>
-          <Sparkline values={monitor.sparkline} width={112} height={36} />
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+            }}
+          >
+            <Sparkline values={monitor.sparkline} width={120} height={40} />
+          </Box>
         </Box>
       </Box>
     </GlassCard>

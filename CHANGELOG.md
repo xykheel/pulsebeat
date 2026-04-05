@@ -1,6 +1,18 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org/).
 
 
+## 1.7.1
+
+### What’s changed
+
+- **Dashboard cards** — Uptime bar and response sparkline sit in a single metrics strip under a light divider (no extra vertical stretch). Labels use consistent uppercase captions and spacing; sparkline is slightly larger and aligned with its label.
+
+## 1.7.0
+
+### What’s new
+
+- **Self-monitoring (Settings)** — **Resource usage** panel with Docker-style metrics: CPU %, memory (usage / limit), cumulative Net I/O, block I/O, and PIDs, read from **cgroup v2** when available (typical in modern Docker). Polls every **3 seconds** while the Settings page is open and the tab is visible. Falls back to cgroup v1 memory-only or process-level stats when cgroups are not exposed.
+
 ## 1.6.1
 
 ### What’s changed
