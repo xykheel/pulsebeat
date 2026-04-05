@@ -25,7 +25,9 @@ COPY server/ ./
 RUN cp /app/CHANGELOG.md ./CHANGELOG.md
 COPY --from=client-build /app/client/dist ./public
 
-RUN mkdir -p /app/data \
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+  && mkdir -p /app/data \
   && chown -R node:node /app
 
 ENV NODE_ENV=production
@@ -33,6 +35,5 @@ ENV PULSEBEAT_DATA_DIR=/app/data
 ENV PULSEBEAT_STATIC_DIR=/app/server/public
 EXPOSE 4141
 
-USER node
-
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["./node_modules/.bin/tsx", "index.ts"]

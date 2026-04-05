@@ -1,6 +1,12 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.8.2
+
+### For administrators
+
+- **Docker** — The image uses an **entrypoint** that starts as root, **`chown`s `PULSEBEAT_DATA_DIR`** (default **`/app/data`**) to the **`node`** user, then runs the server as **`node`**. That fixes **SQLite read-only** errors when the data directory is a bind mount owned by root on the host. If you use **`docker run --user`**, the entrypoint skips **`chown`** and runs your command as that user (ensure the mount is writable for them).
+
 ## 1.8.1
 
 ### For administrators
