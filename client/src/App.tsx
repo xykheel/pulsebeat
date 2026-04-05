@@ -10,6 +10,7 @@ import { brand } from './theme';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const MonitorDetail = lazy(() => import('./pages/MonitorDetail'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
 
 function Loading() {
@@ -29,6 +30,7 @@ function AuthenticatedRoutes() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/monitors/:id" element={<MonitorDetail />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/account/password" element={<ChangePasswordPage />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

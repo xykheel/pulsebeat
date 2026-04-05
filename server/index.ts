@@ -1,4 +1,4 @@
-import './db.js';
+import { getPasswordProtectionEnabled } from './db.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -6,10 +6,12 @@ import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import helmet from 'helmet';
+import { buildHelmetOptions, corsSafelistMiddleware } from './allowedOrigins.js';
 import authRouter from './routes/auth.js';
 import monitorsRouter from './routes/monitors.js';
 import notificationsRouter from './routes/notifications.js';
 import summaryRouter from './routes/summary.js';
+import settingsRouter from './routes/settings.js';
 import { attachUserFromJwt, requireAuth } from './middleware/jwtAuth.js';
 import { rescheduleAll, startPruneJob } from './checker.js';
 import { readAppInfo } from './readAppInfo.js';
@@ -31,27 +33,18 @@ function resolveStaticDir(): string | null {
   return null;
 }
 
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'"],
-      },
-    },
-    crossOriginEmbedderPolicy: false,
-  })
-);
+app.use(corsSafelistMiddleware);
+app.use(helmet(buildHelmetOptions()));
 app.use(compression());
 app.use(cookieParser());
 app.use(express.json({ limit: '512kb' }));
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
+});
+
+app.get('/api/auth/status', (_req: Request, res: Response) => {
+  res.json({ passwordRequired: getPasswordProtectionEnabled() });
 });
 
 app.use('/api', attachUserFromJwt);
@@ -68,6 +61,7 @@ app.get('/api/app-info', requireAuth, (_req: Request, res: Response) => {
 app.use('/api/summary', requireAuth, summaryRouter);
 app.use('/api/notifications', requireAuth, notificationsRouter);
 app.use('/api/monitors', requireAuth, monitorsRouter);
+app.use('/api/settings', requireAuth, settingsRouter);
 
 const staticDir = resolveStaticDir();
 if (staticDir) {

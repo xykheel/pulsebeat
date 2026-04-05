@@ -17,6 +17,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TableContainer,
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -31,6 +32,12 @@ import UptimeBar90 from '../components/UptimeBar90';
 import Sparkline from '../components/Sparkline';
 import MonitorFormDialog from '../components/MonitorFormDialog';
 import type { EnrichedMonitor, HeartbeatPoint, IncidentRow, NotificationItem } from '../types';
+
+function tlsSummaryFromMessage(message: string | null | undefined): string | null {
+  if (!message || !message.includes('TLS')) return null;
+  const idx = message.indexOf('TLS');
+  return message.slice(idx).trim();
+}
 
 export default function MonitorDetail() {
   const { id } = useParams();
@@ -67,7 +74,9 @@ export default function MonitorDetail() {
   }, [load]);
 
   useEffect(() => {
-    const t = setInterval(() => void load(), 30_000);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') void load();
+    }, 30_000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -97,6 +106,11 @@ export default function MonitorDetail() {
   const up = monitor.latest?.status === 1;
   const inactive = !monitor.active;
   const chartPoints = [...heartbeats].reverse().filter((p) => p.latency_ms != null);
+  const recentChecks = heartbeats.slice(0, 50);
+  const isHttps = monitor.type === 'http' && monitor.url.trim().toLowerCase().startsWith('https:');
+  const tlsLine =
+    monitor.type === 'http' ? tlsSummaryFromMessage(monitor.latest?.message) : null;
+  const showTlsCard = monitor.type === 'http' && (!!monitor.check_ssl || isHttps);
 
   return (
     <Box>
@@ -122,9 +136,12 @@ export default function MonitorDetail() {
             sx={{ fontSize: { xs: '1.75rem', sm: '2rem' } }}
             aria-hidden
           />
-          <Typography variant="h4" noWrap>
+          <Typography variant="h4" noWrap component="span">
             {monitor.name}
           </Typography>
+          {monitor.type === 'http' && monitor.check_ssl ? (
+            <Chip size="small" label="TLS" sx={{ typography: 'caption', height: 24 }} />
+          ) : null}
         </Box>
         <IconButton aria-label="Edit" onClick={() => setEditOpen(true)}>
           <EditIcon />
@@ -171,6 +188,7 @@ export default function MonitorDetail() {
                 <Typography variant="body2" component="p" sx={{ m: 0, lineHeight: 1.6 }}>
                   {monitor.type.toUpperCase()} · {monitor.interval}s · {monitor.timeout}ms · retries{' '}
                   {monitor.retries}
+                  {monitor.type === 'http' && monitor.check_ssl ? ' · TLS validation on' : ''}
                 </Typography>
               </Stack>
             </Grid>
@@ -272,6 +290,74 @@ export default function MonitorDetail() {
             Response time
           </Typography>
           <ResponseTimeChart points={chartPoints} />
+        </GlassCard>
+
+        {showTlsCard ? (
+          <GlassCard sx={{ p: 2.5 }}>
+            <Typography variant="h6" gutterBottom>
+              SSL / TLS
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              {monitor.check_ssl
+                ? 'Certificate validity is checked after each successful HTTP response (HTTPS URLs only).'
+                : 'TLS validation is off. Enable it in the monitor editor for HTTPS targets.'}
+            </Typography>
+            <Typography variant="dataSmall" component="p" sx={{ m: 0, lineHeight: 1.55, wordBreak: 'break-word' }}>
+              {monitor.check_ssl
+                ? tlsLine ||
+                  (monitor.latest
+                    ? monitor.latest.message || '—'
+                    : 'No check data yet')
+                : isHttps
+                  ? 'TLS certificate validation is disabled for this monitor. Enable “Validate TLS certificate” to record expiry and chain status on each check.'
+                  : '—'}
+            </Typography>
+          </GlassCard>
+        ) : null}
+
+        <GlassCard sx={{ p: 2.5 }}>
+          <Typography variant="h6" gutterBottom>
+            Recent checks
+          </Typography>
+          {!recentChecks.length ? (
+            <Typography color="text.secondary">No heartbeats yet</Typography>
+          ) : (
+            <TableContainer sx={{ maxHeight: 360 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Time (Sydney)</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Latency</TableCell>
+                    <TableCell>Message</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {recentChecks.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell sx={{ typography: 'dataSmall', whiteSpace: 'nowrap' }}>
+                        {new Date(row.checked_at).toLocaleString('en-AU', {
+                          timeZone: 'Australia/Sydney',
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={row.status === 1 ? 'UP' : 'DOWN'}
+                          color={row.status === 1 ? 'success' : 'error'}
+                          sx={{ height: 22, typography: 'caption' }}
+                        />
+                      </TableCell>
+                      <TableCell align="right" sx={{ typography: 'dataSmall' }}>
+                        {row.latency_ms != null ? `${row.latency_ms} ms` : '—'}
+                      </TableCell>
+                      <TableCell sx={{ typography: 'body2', maxWidth: 280 }}>{row.message || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </GlassCard>
 
         <GlassCard sx={{ p: 2.5 }}>

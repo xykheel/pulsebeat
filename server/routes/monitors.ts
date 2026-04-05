@@ -12,6 +12,7 @@ import {
   uptimePercent,
   dailyUptimeBars,
   avgLatency,
+  getMergedSettings,
   type MonitorRow,
   type DailyBar,
 } from '../db.js';
@@ -31,6 +32,7 @@ interface MonitorBody {
   timeout_ms?: number;
   retries?: number;
   active?: boolean | number;
+  check_ssl?: boolean | number;
   notification_ids?: number[];
 }
 
@@ -42,6 +44,7 @@ interface NormalisedMonitor {
   timeout_ms?: number;
   retries?: number;
   active?: number;
+  check_ssl?: number;
   notification_ids?: number[];
 }
 
@@ -64,6 +67,8 @@ function normaliseBody(body: unknown): NormalisedMonitor | null {
     retries:
       b.retries !== undefined ? Math.max(0, Math.min(10, Number(b.retries) || 0)) : undefined,
     active: b.active !== undefined ? (b.active ? 1 : 0) : undefined,
+    check_ssl:
+      b.check_ssl !== undefined ? (b.check_ssl ? 1 : 0) : undefined,
     notification_ids: Array.isArray(b.notification_ids) ? b.notification_ids : undefined,
   };
 }
@@ -77,6 +82,7 @@ interface EnrichedMonitor {
   timeout: number;
   retries: number;
   active: number;
+  check_ssl: number;
   notification_ids: number[];
   latest: {
     status: number;
@@ -112,6 +118,7 @@ function enrichMonitor(m: MonitorRow): EnrichedMonitor {
     timeout: m.timeout_ms,
     retries: m.retries,
     active: m.active,
+    check_ssl: m.check_ssl ?? 0,
     notification_ids: getMonitorNotificationIds(m.id),
     latest: latest
       ? {
@@ -144,14 +151,19 @@ router.post('/', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'name, type, and url are required' });
   }
   try {
+    const defs = getMergedSettings();
+    const di = parseInt(defs.default_interval_sec || '60', 10);
+    const dt = parseInt(defs.default_timeout_ms || '10000', 10);
+    const dr = parseInt(defs.default_retries || '0', 10);
     const row = createMonitor({
       name: p.name,
       type: p.type,
       url: p.url,
-      interval_sec: p.interval_sec ?? 60,
-      timeout_ms: p.timeout_ms ?? 10000,
-      retries: p.retries ?? 0,
+      interval_sec: p.interval_sec ?? (Number.isFinite(di) ? Math.min(86400, Math.max(5, di)) : 60),
+      timeout_ms: p.timeout_ms ?? (Number.isFinite(dt) ? Math.min(120000, Math.max(1000, dt)) : 10000),
+      retries: p.retries ?? (Number.isFinite(dr) ? Math.min(10, Math.max(0, dr)) : 0),
       active: p.active ?? 1,
+      check_ssl: p.check_ssl ?? 0,
       notification_ids: p.notification_ids,
     });
     if (row.active) scheduleMonitor(row);
@@ -186,6 +198,7 @@ router.put('/:id', (req: Request, res: Response) => {
       timeout_ms: p.timeout_ms,
       retries: p.retries,
       active: p.active,
+      check_ssl: p.check_ssl,
       notification_ids: p.notification_ids,
     });
     if (!row) return res.status(404).json({ error: 'Not found' });

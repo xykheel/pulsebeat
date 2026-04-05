@@ -72,7 +72,85 @@ db.exec(`
     password_hash TEXT NOT NULL,
     created_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
+
+const DEFAULT_SETTINGS: Record<string, string> = {
+  app_name: 'Pulsebeat',
+  default_interval_sec: '60',
+  default_timeout_ms: '10000',
+  default_retries: '0',
+  heartbeat_retention_days: '30',
+  incident_retention_days: '90',
+  password_protection_enabled: '1',
+  admin_password_hash: '',
+};
+
+function migrateSettingsAndSchema(): void {
+  const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
+    ins.run(k, v);
+  }
+  const cols = db.prepare('PRAGMA table_info(monitors)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'check_ssl')) {
+    db.exec('ALTER TABLE monitors ADD COLUMN check_ssl INTEGER NOT NULL DEFAULT 0');
+  }
+}
+
+migrateSettingsAndSchema();
+
+export function getSetting(key: string): string {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined;
+  if (row) return row.value;
+  return DEFAULT_SETTINGS[key] ?? '';
+}
+
+export function setSetting(key: string, value: string): void {
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+}
+
+export function getMergedSettings(): Record<string, string> {
+  const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+  const out: Record<string, string> = { ...DEFAULT_SETTINGS };
+  for (const r of rows) {
+    out[r.key] = r.value;
+  }
+  return out;
+}
+
+export function getPasswordProtectionEnabled(): boolean {
+  return getSetting('password_protection_enabled') !== '0';
+}
+
+export function getHeartbeatRetentionDays(): number {
+  const d = parseInt(getSetting('heartbeat_retention_days'), 10);
+  return Number.isFinite(d) && d > 0 ? Math.min(3650, d) : 30;
+}
+
+export function getIncidentRetentionDays(): number {
+  const d = parseInt(getSetting('incident_retention_days'), 10);
+  return Number.isFinite(d) && d > 0 ? Math.min(3650, d) : 90;
+}
+
+export function getDbFileSizeBytes(): number {
+  try {
+    return fs.statSync(dbPath).size;
+  } catch {
+    return 0;
+  }
+}
+
+export function pruneOldIncidentsResolvedBefore(cutoffMs: number): number {
+  return db
+    .prepare('DELETE FROM incidents WHERE resolved_at IS NOT NULL AND resolved_at < ?')
+    .run(cutoffMs).changes;
+}
 
 function seedDefaultUser(): void {
   const count = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
@@ -99,6 +177,19 @@ function seedDefaultUser(): void {
 }
 
 seedDefaultUser();
+
+function syncAdminPasswordHashFromUserIfEmpty(): void {
+  const v = getSetting('admin_password_hash');
+  if (v) return;
+  const u = db
+    .prepare('SELECT password_hash FROM users ORDER BY id ASC LIMIT 1')
+    .get() as { password_hash: string } | undefined;
+  if (u?.password_hash) {
+    setSetting('admin_password_hash', u.password_hash);
+  }
+}
+
+syncAdminPasswordHashFromUserIfEmpty();
 
 export interface UserRow {
   id: number;
@@ -132,6 +223,7 @@ export interface MonitorRow {
   timeout_ms: number;
   retries: number;
   active: number;
+  check_ssl: number;
 }
 
 export function listMonitors(): MonitorRow[] {
@@ -150,13 +242,14 @@ export interface CreateMonitorInput {
   timeout_ms: number;
   retries: number;
   active: number;
+  check_ssl?: number;
   notification_ids?: number[];
 }
 
 export function createMonitor(row: CreateMonitorInput): MonitorRow {
   const stmt = db.prepare(`
-    INSERT INTO monitors (name, type, url, interval_sec, timeout_ms, retries, active)
-    VALUES (@name, @type, @url, @interval_sec, @timeout_ms, @retries, @active)
+    INSERT INTO monitors (name, type, url, interval_sec, timeout_ms, retries, active, check_ssl)
+    VALUES (@name, @type, @url, @interval_sec, @timeout_ms, @retries, @active, @check_ssl)
   `);
   const info = stmt.run({
     name: row.name,
@@ -166,6 +259,7 @@ export function createMonitor(row: CreateMonitorInput): MonitorRow {
     timeout_ms: row.timeout_ms,
     retries: row.retries,
     active: row.active ?? 1,
+    check_ssl: row.check_ssl ? 1 : 0,
   });
   const id = Number(info.lastInsertRowid);
   if (Array.isArray(row.notification_ids)) {
@@ -182,6 +276,7 @@ export interface UpdateMonitorInput {
   timeout_ms?: number | null;
   retries?: number | null;
   active?: number | null;
+  check_ssl?: number | null;
   notification_ids?: number[];
 }
 
@@ -196,7 +291,8 @@ export function updateMonitor(id: number, row: UpdateMonitorInput): MonitorRow |
       interval_sec = COALESCE(?, interval_sec),
       timeout_ms = COALESCE(?, timeout_ms),
       retries = COALESCE(?, retries),
-      active = COALESCE(?, active)
+      active = COALESCE(?, active),
+      check_ssl = COALESCE(?, check_ssl)
     WHERE id = ?
   `).run(
     row.name ?? null,
@@ -206,6 +302,7 @@ export function updateMonitor(id: number, row: UpdateMonitorInput): MonitorRow |
     row.timeout_ms ?? null,
     row.retries ?? null,
     row.active ?? null,
+    row.check_ssl ?? null,
     id
   );
   if (Array.isArray(row.notification_ids)) {
@@ -262,9 +359,18 @@ export function getEnabledNotificationsForMonitor(monitorId: number): Notificati
   return rows.map(parseConfigRow);
 }
 
-export function pruneOldHeartbeats(maxAgeMs = 120 * 24 * 60 * 60 * 1000): number {
-  const cutoff = Date.now() - maxAgeMs;
+export function pruneOldHeartbeats(maxAgeMs?: number): number {
+  const ms =
+    maxAgeMs ?? getHeartbeatRetentionDays() * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - ms;
   return db.prepare('DELETE FROM heartbeats WHERE checked_at < ?').run(cutoff).changes;
+}
+
+export function runRetentionPrune(): { heartbeats: number; incidents: number } {
+  const hb = pruneOldHeartbeats();
+  const incCutoff = Date.now() - getIncidentRetentionDays() * 24 * 60 * 60 * 1000;
+  const inc = pruneOldIncidentsResolvedBefore(incCutoff);
+  return { heartbeats: hb, incidents: inc };
 }
 
 export function insertHeartbeat(

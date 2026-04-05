@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Navigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -10,8 +11,14 @@ import {
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { apiSend } from '../api';
 import GlassCard from '../components/GlassCard';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ChangePasswordPage() {
+  const { user } = useAuth();
+  if (!user || user.id < 0) {
+    return <Navigate to="/" replace />;
+  }
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
