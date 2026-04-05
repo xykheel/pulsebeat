@@ -29,6 +29,21 @@ export async function notifyMonitorEvent(
   return results;
 }
 
+export async function notifySslAlert(monitor: MonitorRow, detail: string): Promise<PromiseSettledResult<unknown>[]> {
+  const title = `Pulsebeat — SSL: ${monitor.name}`;
+  const body = [
+    `Monitor: ${monitor.name}`,
+    `Type: ${monitor.type.toUpperCase()}`,
+    `Target: ${monitor.url}`,
+    `Detail: ${detail}`,
+    `Time: ${new Date().toISOString()}`,
+  ].join('\n');
+  const list = getEnabledNotificationsForMonitor(monitor.id);
+  return Promise.allSettled(
+    list.map((n) => dispatchNotification(n.type, n.config as NotificationConfig, title, body))
+  );
+}
+
 export async function sendTestNotification(notificationId: number): Promise<void> {
   const n = getNotification(notificationId);
   if (!n) throw new Error('Notification not found');

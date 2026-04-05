@@ -12,6 +12,7 @@ const MonitorDetail = lazy(() => import('./pages/MonitorDetail'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
+const MaintenancePage = lazy(() => import('./pages/MaintenancePage'));
 
 function Loading() {
   return (
@@ -30,6 +31,7 @@ function AuthenticatedRoutes() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/monitors/:id" element={<MonitorDetail />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/account/password" element={<ChangePasswordPage />} />
           <Route path="/login" element={<Navigate to="/" replace />} />

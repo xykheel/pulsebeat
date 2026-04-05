@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-export interface ContainerMetricsPayload {
+interface ContainerMetricsPayload {
   /** How metrics were collected */
   source: 'cgroup_v2' | 'cgroup_v1_memory' | 'process';
   cpu_percent: number | null;

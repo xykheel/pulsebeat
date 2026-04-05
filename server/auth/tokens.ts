@@ -16,7 +16,7 @@ function getSecret(): string {
 
 const secret = getSecret();
 
-export interface TokenUser {
+interface TokenUser {
   id: number;
   username: string;
 }
@@ -25,7 +25,7 @@ export function signUserToken(user: TokenUser): string {
   return jwt.sign({ sub: String(user.id), username: user.username }, secret, { expiresIn: '7d' });
 }
 
-export interface VerifiedToken {
+interface VerifiedToken {
   sub: string;
   username: string;
 }
