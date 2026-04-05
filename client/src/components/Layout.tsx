@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -19,10 +19,13 @@ import { useTheme } from '@mui/material/styles';
 import MonitorHeartIcon from '@mui/icons-material/Favorite';
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
+import { apiGet } from '../api';
 import { brand, appBarSx, navLinkClassName } from '../theme';
 import UserMenu from './UserMenu';
 import type { ReactNode } from 'react';
+import type { AppSettingsPublic } from '../types';
 
 const DRAWER_WIDTH = 280;
 
@@ -31,6 +34,31 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const isMobileNav = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [displayName, setDisplayName] = useState<string>(String(brand.displayName));
+
+  const refreshDisplayName = useCallback(async () => {
+    try {
+      const s = await apiGet<AppSettingsPublic>('/api/settings');
+      if (s.app_name?.trim()) {
+        setDisplayName(s.app_name.trim());
+        document.title = s.app_name.trim();
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshDisplayName();
+  }, [refreshDisplayName]);
+
+  useEffect(() => {
+    function onSettingsUpdated() {
+      void refreshDisplayName();
+    }
+    window.addEventListener('pulsebeat:settings-updated', onSettingsUpdated);
+    return () => window.removeEventListener('pulsebeat:settings-updated', onSettingsUpdated);
+  }, [refreshDisplayName]);
 
   const closeDrawer = () => setMobileOpen(false);
 
@@ -57,7 +85,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           component={RouterLink}
           to="/notifications"
           selected={pathname === '/notifications'}
-          sx={{ borderRadius: 1 }}
+          sx={{ borderRadius: 1, mb: 0.5 }}
         >
           <ListItemIcon
             sx={{
@@ -68,6 +96,22 @@ export default function Layout({ children }: { children: ReactNode }) {
             <NotificationsOutlinedIcon />
           </ListItemIcon>
           <ListItemText primary="Notifications" />
+        </ListItemButton>
+        <ListItemButton
+          component={RouterLink}
+          to="/settings"
+          selected={pathname === '/settings'}
+          sx={{ borderRadius: 1 }}
+        >
+          <ListItemIcon
+            sx={{
+              minWidth: 40,
+              color: pathname === '/settings' ? 'primary.main' : 'text.secondary',
+            }}
+          >
+            <SettingsOutlinedIcon />
+          </ListItemIcon>
+          <ListItemText primary="Settings" />
         </ListItemButton>
       </List>
     </Box>
@@ -97,7 +141,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               to="/"
               className="min-w-0 max-w-[55vw] truncate font-bold no-underline text-inherit sm:max-w-none"
             >
-              {brand.displayName}
+              {displayName}
             </Typography>
           </Box>
 
@@ -120,6 +164,15 @@ export default function Layout({ children }: { children: ReactNode }) {
               >
                 <NotificationsOutlinedIcon className="shrink-0 text-[1.25rem]" aria-hidden />
                 Notifications
+              </Link>
+              <Link
+                component={RouterLink}
+                to="/settings"
+                underline="none"
+                className={navLinkClassName(pathname === '/settings')}
+              >
+                <SettingsOutlinedIcon className="shrink-0 text-[1.25rem]" aria-hidden />
+                Settings
               </Link>
             </Box>
           ) : null}

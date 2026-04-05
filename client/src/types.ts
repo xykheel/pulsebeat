@@ -17,6 +17,25 @@ export interface DailyBar {
 
 export type MonitorType = 'http' | 'tcp' | 'ping';
 
+export interface AppSettingsPublic {
+  app_name: string;
+  default_interval_sec: number;
+  default_timeout_ms: number;
+  default_retries: number;
+  heartbeat_retention_days: number;
+  incident_retention_days: number;
+  password_protection_enabled: boolean;
+  has_admin_password: boolean;
+  db_size_bytes: number;
+}
+
+export interface AboutInfo {
+  version: string;
+  node_version: string;
+  uptime_sec: number;
+  github_url: string | null;
+}
+
 export interface EnrichedMonitor {
   id: number;
   name: string;
@@ -26,6 +45,7 @@ export interface EnrichedMonitor {
   timeout: number;
   retries: number;
   active: number;
+  check_ssl: number;
   notification_ids: number[];
   latest: MonitorLatest | null;
   uptime_pct_90d: number | null;

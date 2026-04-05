@@ -1,5 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { AUTH_COOKIE_NAME, verifyUserToken } from '../auth/tokens.js';
+import { getPasswordProtectionEnabled } from '../db.js';
+
+/** Used when password protection is disabled (open dashboard). */
+export const GUEST_USER = { id: -1, username: 'guest' };
 
 export function attachUserFromJwt(req: Request, _res: Response, next: NextFunction): void {
   let token: string | undefined = req.cookies?.[AUTH_COOKIE_NAME];
@@ -8,15 +12,16 @@ export function attachUserFromJwt(req: Request, _res: Response, next: NextFuncti
     if (auth?.startsWith('Bearer ')) token = auth.slice(7);
   }
   req.user = null;
-  if (!token) {
-    next();
-    return;
+  if (token) {
+    try {
+      const payload = verifyUserToken(token);
+      req.user = { id: Number(payload.sub), username: payload.username };
+    } catch {
+      req.user = null;
+    }
   }
-  try {
-    const payload = verifyUserToken(token);
-    req.user = { id: Number(payload.sub), username: payload.username };
-  } catch {
-    req.user = null;
+  if (!req.user && !getPasswordProtectionEnabled()) {
+    req.user = { ...GUEST_USER };
   }
   next();
 }

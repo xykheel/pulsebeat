@@ -46,6 +46,10 @@ To follow logs: `docker compose logs -f`.
 
 The database is stored under `./data` on the host (`pulsebeat.db`). The image installs build tools so `better-sqlite3` compiles on **ARM64** (e.g. Raspberry Pi) and **amd64**.
 
+### Public URL, CORS, and CSP
+
+If the UI and API are served from the **same origin** (default), you typically need no extra configuration. If the browser’s origin differs from the API, or you see **Content-Security-Policy** / **connect-src** violations in the console, set **`PULSEBEAT_ALLOWED_ORIGINS`** to a comma-separated list of full origins (scheme and host only, no path), for example `https://pulsebeat.example.com`. That list is merged into the app’s **CSP `connect-src`** and is used for **credentialed CORS** on `/api`. If a reverse proxy or CDN adds its own CSP (including **Report-Only** policies such as `connect-src 'none'`), update or remove that header there—Pulsebeat cannot override headers injected in front of the Node process.
+
 ## Versioning and changelog
 
 - Canonical changelog: **`CHANGELOG.md`** at the repo root (user-facing language).

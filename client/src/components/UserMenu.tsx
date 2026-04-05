@@ -55,27 +55,38 @@ export default function UserMenu() {
           },
         }}
       >
-        <MenuItem
-          component={RouterLink}
-          to="/account/password"
-          onClick={() => setAnchorEl(null)}
-        >
-          <ListItemIcon>
-            <LockOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primaryTypographyProps={{ variant: 'body2' }}>Change password</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            setAnchorEl(null);
-            void logout();
-          }}
-        >
-          <ListItemIcon>
-            <LogoutOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primaryTypographyProps={{ variant: 'body2' }}>Sign out</ListItemText>
-        </MenuItem>
+        {user && user.id >= 0 ? (
+          <MenuItem
+            component={RouterLink}
+            to="/account/password"
+            onClick={() => setAnchorEl(null)}
+          >
+            <ListItemIcon>
+              <LockOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primaryTypographyProps={{ variant: 'body2' }}>Change password</ListItemText>
+          </MenuItem>
+        ) : null}
+        {user && user.id >= 0 ? (
+          <MenuItem
+            onClick={() => {
+              setAnchorEl(null);
+              void logout();
+            }}
+          >
+            <ListItemIcon>
+              <LogoutOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primaryTypographyProps={{ variant: 'body2' }}>Sign out</ListItemText>
+          </MenuItem>
+        ) : (
+          <MenuItem disabled>
+            <ListItemText
+              primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
+              primary="Open access (no sign-in)"
+            />
+          </MenuItem>
+        )}
       </Menu>
     </>
   );

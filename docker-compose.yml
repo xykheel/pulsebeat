@@ -14,3 +14,5 @@ services:
       # Initial admin password (only used when the users table is first created)
       PULSEBEAT_ADMIN_PASSWORD: ${PULSEBEAT_ADMIN_PASSWORD:-}
       PULSEBEAT_ADMIN_USER: ${PULSEBEAT_ADMIN_USER:-admin}
+      # Optional: CORS + CSP connect-src (comma-separated origins, e.g. https://pulsebeat.example.com)
+      PULSEBEAT_ALLOWED_ORIGINS: ${PULSEBEAT_ALLOWED_ORIGINS:-}

@@ -1,0 +1,294 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Link,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { apiGet, apiSend } from '../api';
+import GlassCard from '../components/GlassCard';
+import type { AboutInfo, AppSettingsPublic } from '../types';
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'] as const;
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i += 1;
+  }
+  return `${n < 10 && i > 0 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+}
+
+function formatUptime(sec: number): string {
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const parts: string[] = [];
+  if (d) parts.push(`${d}d`);
+  if (h || d) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  return parts.join(' ');
+}
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState<AppSettingsPublic | null>(null);
+  const [about, setAbout] = useState<AboutInfo | null>(null);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [purging, setPurging] = useState(false);
+  const [form, setForm] = useState({
+    app_name: '',
+    default_interval_sec: '60',
+    default_timeout_ms: '10000',
+    default_retries: '0',
+    heartbeat_retention_days: '30',
+    incident_retention_days: '90',
+  });
+
+  const load = useCallback(async () => {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      const [s, a] = await Promise.all([
+        apiGet<AppSettingsPublic>('/api/settings'),
+        apiGet<AboutInfo>('/api/settings/about'),
+      ]);
+      setSettings(s);
+      setAbout(a);
+      setForm((f) => ({
+        ...f,
+        app_name: s.app_name,
+        default_interval_sec: String(s.default_interval_sec),
+        default_timeout_ms: String(s.default_timeout_ms),
+        default_retries: String(s.default_retries),
+        heartbeat_retention_days: String(s.heartbeat_retention_days),
+        incident_retention_days: String(s.incident_retention_days),
+      }));
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load settings');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  function applySettingsResponse(s: AppSettingsPublic) {
+    setSettings(s);
+    setForm((f) => ({
+      ...f,
+      app_name: s.app_name,
+      default_interval_sec: String(s.default_interval_sec),
+      default_timeout_ms: String(s.default_timeout_ms),
+      default_retries: String(s.default_retries),
+      heartbeat_retention_days: String(s.heartbeat_retention_days),
+      incident_retention_days: String(s.incident_retention_days),
+    }));
+    window.dispatchEvent(new CustomEvent('pulsebeat:settings-updated'));
+  }
+
+  async function saveGeneral() {
+    setSaving(true);
+    setError('');
+    try {
+      const s = await apiSend<AppSettingsPublic>('/api/settings', 'PUT', {
+        app_name: form.app_name.trim(),
+        default_interval_sec: Number(form.default_interval_sec),
+        default_timeout_ms: Number(form.default_timeout_ms),
+        default_retries: Number(form.default_retries),
+      });
+      if (s) applySettingsResponse(s);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveRetention() {
+    setSaving(true);
+    setError('');
+    try {
+      const s = await apiSend<AppSettingsPublic>('/api/settings', 'PUT', {
+        heartbeat_retention_days: Number(form.heartbeat_retention_days),
+        incident_retention_days: Number(form.incident_retention_days),
+      });
+      if (s) applySettingsResponse(s);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function purgeNow() {
+    if (
+      !window.confirm(
+        'Purge heartbeats and resolved incidents older than your retention settings? This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+    setPurging(true);
+    setError('');
+    try {
+      const r = await apiSend<AppSettingsPublic & { heartbeats_deleted: number; incidents_deleted: number }>(
+        '/api/settings/purge',
+        'POST'
+      );
+      if (r) applySettingsResponse(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Purge failed');
+    } finally {
+      setPurging(false);
+    }
+  }
+
+  return (
+    <Box>
+      <Box className="mb-4 flex flex-wrap items-center gap-2">
+        <SettingsOutlinedIcon className="text-pb-primary text-[2rem] shrink-0" aria-hidden />
+        <Typography variant="h4" component="h1" className="tracking-tight">
+          Settings
+        </Typography>
+      </Box>
+
+      {error ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
+
+      <Stack spacing={2.5}>
+        <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Typography variant="h6" gutterBottom>
+            General
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Display name and defaults for new monitors.
+          </Typography>
+          <Stack spacing={2} sx={{ maxWidth: 480 }}>
+            <TextField
+              label="App name"
+              value={form.app_name}
+              onChange={(e) => setForm((f) => ({ ...f, app_name: e.target.value }))}
+              fullWidth
+            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Default check interval (sec)"
+                type="number"
+                value={form.default_interval_sec}
+                onChange={(e) => setForm((f) => ({ ...f, default_interval_sec: e.target.value }))}
+                fullWidth
+                inputProps={{ min: 5, max: 86400 }}
+              />
+              <TextField
+                label="Default timeout (ms)"
+                type="number"
+                value={form.default_timeout_ms}
+                onChange={(e) => setForm((f) => ({ ...f, default_timeout_ms: e.target.value }))}
+                fullWidth
+                inputProps={{ min: 1000, max: 120000 }}
+              />
+              <TextField
+                label="Default retries"
+                type="number"
+                value={form.default_retries}
+                onChange={(e) => setForm((f) => ({ ...f, default_retries: e.target.value }))}
+                fullWidth
+                inputProps={{ min: 0, max: 10 }}
+              />
+            </Stack>
+            <Button variant="contained" onClick={() => void saveGeneral()} disabled={saving}>
+              Save general
+            </Button>
+          </Stack>
+        </GlassCard>
+
+        <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Typography variant="h6" gutterBottom>
+            Data retention
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Heartbeats and resolved incidents are pruned automatically every few hours. Open incidents are kept
+            until resolved.
+          </Typography>
+          <Stack spacing={2} sx={{ maxWidth: 480 }}>
+            <TextField
+              label="Heartbeat retention (days)"
+              type="number"
+              value={form.heartbeat_retention_days}
+              onChange={(e) => setForm((f) => ({ ...f, heartbeat_retention_days: e.target.value }))}
+              fullWidth
+              inputProps={{ min: 1, max: 3650 }}
+            />
+            <TextField
+              label="Incident retention (days)"
+              type="number"
+              value={form.incident_retention_days}
+              onChange={(e) => setForm((f) => ({ ...f, incident_retention_days: e.target.value }))}
+              fullWidth
+              inputProps={{ min: 1, max: 3650 }}
+            />
+            <Typography variant="body2">
+              Estimated database size on disk:{' '}
+              <Box component="span" sx={{ fontWeight: 600, typography: 'data' }}>
+                {settings ? formatBytes(settings.db_size_bytes) : '—'}
+              </Box>
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <Button variant="contained" onClick={() => void saveRetention()} disabled={saving}>
+                Save retention
+              </Button>
+              <Button variant="outlined" color="warning" onClick={() => void purgeNow()} disabled={purging}>
+                {purging ? 'Purging…' : 'Purge old data now'}
+              </Button>
+            </Stack>
+          </Stack>
+        </GlassCard>
+
+        <GlassCard sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Typography variant="h6" gutterBottom>
+            About
+          </Typography>
+          {about ? (
+            <Stack spacing={1}>
+              <Typography variant="body2">
+                Version: <Box component="span" sx={{ typography: 'data' }}>{about.version}</Box>
+              </Typography>
+              <Typography variant="body2">
+                Server uptime:{' '}
+                <Box component="span" sx={{ typography: 'data' }}>
+                  {formatUptime(about.uptime_sec)}
+                </Box>
+              </Typography>
+              <Typography variant="body2">
+                Node.js: <Box component="span" sx={{ typography: 'data' }}>{about.node_version}</Box>
+              </Typography>
+              {about.github_url ? (
+                <Link href={about.github_url} target="_blank" rel="noopener noreferrer" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                  GitHub
+                  <OpenInNewIcon sx={{ fontSize: '1rem' }} />
+                </Link>
+              ) : (
+                <Typography variant="caption" color="text.secondary">
+                  Set <Box component="code">PULSEBEAT_GITHUB_URL</Box> in the environment to show a repository link.
+                </Typography>
+              )}
+            </Stack>
+          ) : (
+            <Typography color="text.secondary">Loading…</Typography>
+          )}
+        </GlassCard>
+      </Stack>
+    </Box>
+  );
+}

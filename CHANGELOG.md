@@ -1,6 +1,26 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org/).
 
 
+## 1.6.1
+
+### What’s changed
+
+- **Settings** — The **Notifications** and **Authentication** sections were removed from the Settings page. Use **Notifications** in the nav for channels and **Account → Change password** for the admin password.
+
+## 1.6.0
+
+### What’s new
+
+- **Allowed origins** — Set `PULSEBEAT_ALLOWED_ORIGINS` to a comma-separated list of absolute origins (for example `https://pulsebeat.example.com`). Each entry is added to **Content-Security-Policy** `connect-src` (with matching `ws:` / `wss:` where applicable) and may receive **credentialed CORS** responses for `/api` requests. If a reverse proxy injects its own **Content-Security-Policy-Report-Only** (for example `connect-src 'none'`), adjust or remove that header at the proxy; Pulsebeat cannot override headers added in front of the app.
+
+## 1.5.0
+
+### What’s new
+
+- **Settings** — New **Settings** page (`/settings`) stores options in SQLite: app display name, default monitor interval/timeout/retries, heartbeat and incident retention (with estimated database file size and a **Purge old data now** action), notification channel list with enable/disable and delete, optional **password protection** toggle with admin password stored as a bcrypt hash (synced with the seeded admin user), and **About** (app version, process uptime, Node.js version, optional GitHub link via `PULSEBEAT_GITHUB_URL`).
+- **TLS monitoring** — HTTP monitors can **validate TLS certificates** on `https://` URLs after a successful response; expiry and subject appear in check messages and on the monitor detail **SSL / TLS** section.
+- **Monitor detail** — **Recent checks** table (latest 50 heartbeats), TLS summary for HTTPS monitors, **TLS** badge when validation is enabled, and polling pauses when the document tab is hidden.
+
 ## 1.4.0
 
 ### What’s new

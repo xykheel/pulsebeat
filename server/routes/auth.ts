@@ -1,6 +1,13 @@
 import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { findUserByUsername, findUserById, updateUserPasswordHash } from '../db.js';
+import {
+  findUserByUsername,
+  findUserById,
+  updateUserPasswordHash,
+  getPasswordProtectionEnabled,
+  getSetting,
+  setSetting,
+} from '../db.js';
 import { signUserToken, AUTH_COOKIE_NAME } from '../auth/tokens.js';
 
 const router = Router();
@@ -41,7 +48,14 @@ const cookieOptions = () => ({
   path: '/',
 });
 
+function adminEnvUsername(): string {
+  return (process.env.PULSEBEAT_ADMIN_USER || 'admin').trim();
+}
+
 router.post('/login', (req: Request, res: Response) => {
+  if (!getPasswordProtectionEnabled()) {
+    return res.status(400).json({ error: 'Password protection is disabled' });
+  }
   const ip = req.ip || req.socket.remoteAddress || '';
   if (!rateLimitLogin(ip)) {
     return res.status(429).json({ error: 'Too many login attempts' });
@@ -51,7 +65,19 @@ router.post('/login', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Username and password required' });
   }
   const user = findUserByUsername(username.trim());
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+  const settingsHash = getSetting('admin_password_hash');
+  let valid = bcrypt.compareSync(password, user.password_hash);
+  if (
+    !valid &&
+    settingsHash &&
+    user.username.toLowerCase() === adminEnvUsername().toLowerCase()
+  ) {
+    valid = bcrypt.compareSync(password, settingsHash);
+  }
+  if (!valid) {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   const token = signUserToken({ id: user.id, username: user.username });
@@ -78,6 +104,9 @@ router.get('/me', (req: Request, res: Response) => {
 router.put('/password', (req: Request, res: Response) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Not authenticated' });
+  }
+  if (req.user.id < 0) {
+    return res.status(400).json({ error: 'Password cannot be changed in open access mode' });
   }
   const ip = req.ip || req.socket.remoteAddress || '';
   if (!rateLimitPasswordChange(ip)) {
@@ -110,6 +139,9 @@ router.put('/password', (req: Request, res: Response) => {
   const ok = updateUserPasswordHash(user.id, hash);
   if (!ok) {
     return res.status(500).json({ error: 'Could not update password' });
+  }
+  if (user.username.toLowerCase() === adminEnvUsername().toLowerCase()) {
+    setSetting('admin_password_hash', hash);
   }
   res.json({ ok: true });
 });

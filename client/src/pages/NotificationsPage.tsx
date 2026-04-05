@@ -3,20 +3,11 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
   IconButton,
   List,
   ListItem,
   ListItemSecondaryAction,
   ListItemText,
-  MenuItem,
-  Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -26,51 +17,14 @@ import SendIcon from '@mui/icons-material/Send';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import { apiGet, apiSend } from '../api';
 import GlassCard from '../components/GlassCard';
-import NotificationConfigFields from '../components/NotificationConfigFields';
+import NotificationEditDialog from '../components/NotificationEditDialog';
 import { listRowDividerSx } from '../theme';
 import type { NotificationItem } from '../types';
-
-const TYPES = [
-  'telegram',
-  'discord',
-  'slack',
-  'smtp',
-  'webhook',
-  'teams',
-  'pushover',
-  'pushbullet',
-  'pagerduty',
-  'gotify',
-  'ntfy',
-  'signal',
-  'rocketchat',
-  'matrix',
-  'twilio',
-  'apprise',
-] as const;
-
-interface NotifFormState {
-  name: string;
-  type: string;
-  config: Record<string, unknown>;
-  enabled: boolean;
-}
-
-function emptyForm(): NotifFormState {
-  return {
-    name: '',
-    type: 'discord',
-    config: {},
-    enabled: true,
-  };
-}
 
 export default function NotificationsPage() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<NotificationItem | null>(null);
-  const [form, setForm] = useState<NotifFormState>(emptyForm);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [testId, setTestId] = useState<number | null>(null);
 
@@ -90,45 +44,14 @@ export default function NotificationsPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm(emptyForm());
     setError('');
     setOpen(true);
   }
 
   function openEdit(n: NotificationItem) {
     setEditing(n);
-    setForm({
-      name: n.name,
-      type: n.type,
-      config: { ...n.config },
-      enabled: !!n.enabled,
-    });
     setError('');
     setOpen(true);
-  }
-
-  async function save() {
-    setSaving(true);
-    setError('');
-    try {
-      const payload = {
-        name: form.name,
-        type: form.type,
-        config: form.config,
-        enabled: form.enabled,
-      };
-      if (editing) {
-        await apiSend(`/api/notifications/${editing.id}`, 'PUT', payload);
-      } else {
-        await apiSend('/api/notifications', 'POST', payload);
-      }
-      setOpen(false);
-      void load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function remove(n: NotificationItem) {
@@ -208,54 +131,12 @@ export default function NotificationsPage() {
         )}
       </GlassCard>
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editing ? 'Edit notification' : 'Add notification'}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Name"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              fullWidth
-              required
-            />
-            <TextField
-              select
-              label="Provider"
-              value={form.type}
-              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value, config: {} }))}
-              fullWidth
-            >
-              {TYPES.map((t) => (
-                <MenuItem key={t} value={t}>
-                  {t}
-                </MenuItem>
-              ))}
-            </TextField>
-            <NotificationConfigFields
-              type={form.type}
-              config={form.config}
-              onChange={(config) => setForm((f) => ({ ...f, config }))}
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={form.enabled}
-                  onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
-                />
-              }
-              label="Enabled"
-            />
-            {error ? <Alert severity="error">{error}</Alert> : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={() => void save()} disabled={saving || !form.name}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <NotificationEditDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        editing={editing}
+        onSaved={() => void load()}
+      />
     </Box>
   );
 }

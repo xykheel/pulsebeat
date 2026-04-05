@@ -1,5 +1,7 @@
 import { execFile } from 'child_process';
 import net from 'net';
+import tls from 'tls';
+import { URL } from 'url';
 import { promisify } from 'util';
 import {
   insertHeartbeat,
@@ -8,7 +10,7 @@ import {
   openIncident,
   resolveOpenIncident,
   getLatestHeartbeat,
-  pruneOldHeartbeats,
+  runRetentionPrune,
   type MonitorRow,
 } from './db.js';
 import { notifyMonitorEvent } from './notifications/dispatch.js';
@@ -77,7 +79,88 @@ async function checkPing(host: string, timeoutMs: number): Promise<CheckResult> 
   }
 }
 
-async function checkHttp(url: string, timeoutMs: number, retries: number): Promise<CheckResult> {
+function parseHttpsHostPort(rawUrl: string): { host: string; port: number } | null {
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== 'https:') return null;
+    const host = u.hostname;
+    const port = u.port ? Number(u.port) : 443;
+    if (!host || !Number.isFinite(port)) return null;
+    return { host, port };
+  } catch {
+    return null;
+  }
+}
+
+function checkTlsCertificate(host: string, port: number, timeoutMs: number): Promise<CheckResult> {
+  return new Promise((resolve) => {
+    const socket = tls.connect(
+      {
+        host,
+        port,
+        servername: host,
+        rejectUnauthorized: true,
+      },
+      () => {
+        try {
+          const cert = socket.getPeerCertificate(true) as
+            | { valid_to?: string; subject?: { CN?: string } }
+            | null
+            | undefined;
+          socket.destroy();
+          const validToStr = cert?.valid_to;
+          if (!validToStr || (typeof cert === 'object' && cert && Object.keys(cert).length === 0)) {
+            resolve({ ok: false, latency: null, message: 'TLS: no certificate' });
+            return;
+          }
+          const exp = new Date(validToStr);
+          if (Number.isNaN(exp.getTime())) {
+            resolve({ ok: false, latency: null, message: 'TLS: invalid certificate dates' });
+            return;
+          }
+          const now = Date.now();
+          if (exp.getTime() < now) {
+            resolve({
+              ok: false,
+              latency: null,
+              message: `TLS: certificate expired ${exp.toISOString().slice(0, 10)}`,
+            });
+            return;
+          }
+          const daysLeft = Math.floor((exp.getTime() - now) / (24 * 60 * 60 * 1000));
+          const cn = cert?.subject?.CN ?? host;
+          resolve({
+            ok: true,
+            latency: null,
+            message: `TLS OK · CN ${String(cn)} · expires ${exp.toISOString().slice(0, 10)} (${daysLeft}d)`,
+          });
+        } catch (e: unknown) {
+          try {
+            socket.destroy();
+          } catch {
+            /* ignore */
+          }
+          const msg = e instanceof Error ? e.message : 'TLS error';
+          resolve({ ok: false, latency: null, message: `TLS: ${msg}` });
+        }
+      }
+    );
+    socket.setTimeout(timeoutMs, () => {
+      socket.destroy();
+      resolve({ ok: false, latency: null, message: 'TLS handshake timeout' });
+    });
+    socket.on('error', (err: Error) => {
+      resolve({ ok: false, latency: null, message: `TLS: ${err.message || 'error'}` });
+    });
+  });
+}
+
+async function checkHttp(
+  url: string,
+  timeoutMs: number,
+  retries: number,
+  validateTls: boolean
+): Promise<CheckResult> {
   let lastMessage = 'Request failed';
   for (let attempt = 0; attempt <= retries; attempt++) {
     const started = Date.now();
@@ -93,7 +176,19 @@ async function checkHttp(url: string, timeoutMs: number, retries: number): Promi
       clearTimeout(t);
       const latency = Date.now() - started;
       if (res.ok) {
-        return { ok: true, latency, message: `HTTP ${res.status}` };
+        let msg = `HTTP ${res.status}`;
+        if (validateTls) {
+          const hp = parseHttpsHostPort(url);
+          if (!hp) {
+            return { ok: false, latency, message: `${msg} · TLS validation requires https:// URL` };
+          }
+          const tlsRes = await checkTlsCertificate(hp.host, hp.port, timeoutMs);
+          if (!tlsRes.ok) {
+            return { ok: false, latency, message: `${msg} · ${tlsRes.message}` };
+          }
+          msg = `${msg} · ${tlsRes.message}`;
+        }
+        return { ok: true, latency, message: msg };
       }
       lastMessage = `HTTP ${res.status}`;
     } catch (e: unknown) {
@@ -114,7 +209,8 @@ async function runCheck(monitor: MonitorRow): Promise<void> {
   const retries = monitor.retries ?? 0;
   let result: CheckResult;
   if (monitor.type === 'http') {
-    result = await checkHttp(monitor.url, timeout, retries);
+    const validateTls = monitor.check_ssl === 1;
+    result = await checkHttp(monitor.url, timeout, retries, validateTls);
   } else if (monitor.type === 'tcp') {
     const { host, port } = parseTcpTarget(monitor.url);
     result = await checkTcp(host, port, timeout);
@@ -186,7 +282,7 @@ export function startPruneJob(): void {
   if (pruneTimer) clearInterval(pruneTimer);
   pruneTimer = setInterval(() => {
     try {
-      pruneOldHeartbeats();
+      runRetentionPrune();
     } catch {
       /* ignore */
     }

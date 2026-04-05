@@ -28,6 +28,7 @@ type FormState = {
   timeout: string;
   retries: string;
   active: boolean;
+  check_ssl: boolean;
   notification_ids: number[];
 };
 
@@ -40,6 +41,7 @@ function initialEmpty(): FormState {
     timeout: '10000',
     retries: '0',
     active: true,
+    check_ssl: false,
     notification_ids: [],
   };
 }
@@ -73,6 +75,7 @@ export default function MonitorFormDialog({
         timeout: String(monitor.timeout),
         retries: String(monitor.retries),
         active: !!monitor.active,
+        check_ssl: !!(monitor.check_ssl ?? 0),
         notification_ids: monitor.notification_ids || [],
       });
     } else {
@@ -92,6 +95,7 @@ export default function MonitorFormDialog({
         timeout: Number(form.timeout),
         retries: Number(form.retries),
         active: form.active,
+        check_ssl: form.type === 'http' ? form.check_ssl : false,
         notification_ids: form.notification_ids,
       };
       if (monitor) {
@@ -139,6 +143,17 @@ export default function MonitorFormDialog({
             <MenuItem value="tcp">TCP</MenuItem>
             <MenuItem value="ping">Ping</MenuItem>
           </TextField>
+          {form.type === 'http' ? (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={form.check_ssl}
+                  onChange={(e) => setForm((f) => ({ ...f, check_ssl: e.target.checked }))}
+                />
+              }
+              label="Validate TLS certificate (HTTPS only)"
+            />
+          ) : null}
           <TextField
             label={form.type === 'http' ? 'URL' : form.type === 'tcp' ? 'Host:port' : 'Hostname'}
             value={form.url}
