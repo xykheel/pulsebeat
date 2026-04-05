@@ -11,5 +11,5 @@
     "verbatimModuleSyntax": false,
     "types": ["node"]
   },
-  "include": ["./**/*.ts", "./types/**/*.d.ts"]
+  "include": ["./**/*.ts", "./**/*.d.ts"]
 }
