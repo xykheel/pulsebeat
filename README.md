@@ -93,3 +93,11 @@ If the browser origin and API origin differ, or you see **Content-Security-Polic
 ## Licence
 
 See [LICENSE](LICENSE).
+
+---
+
+## Support
+
+If you find Aura useful, consider buying me a coffee.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/xykheel)
