@@ -29,6 +29,27 @@ Access is **password-protected** with **JWT** sessions (`httpOnly` cookies); the
 
 The official image serves the **web UI and REST API** on **port 4141** from a single process.
 
+```bash
+services:
+  pulsebeat:
+    image: replace_with_your_image_repo_and_tag
+    container_name: pulsebeat
+    restart: unless-stopped
+    mem_limit: 512m
+    ports:
+      - "4141:4141"
+    volumes:
+      - ./data:/app/data
+    environment:
+      NODE_ENV: production
+      PULSEBEAT_DATA_DIR: /app/data
+      PULSEBEAT_JWT_SECRET: `openssl rand -hex 32`
+      PULSEBEAT_ADMIN_PASSWORD: replace_with_my_password
+      PULSEBEAT_ADMIN_USER: replace_with_my_user
+      PULSEBEAT_ALLOWED_ORIGINS: https://pulsebeat.yourdomain.com,http://localhost:4141,http://localhost:5173
+```
+
+
 1. **Clone** this repository (or use your own compose file pointing at the image).
 2. **Copy** environment defaults: `cp .env.example .env`
 3. **Set** at least **`PULSEBEAT_JWT_SECRET`** (16+ characters). **Set** **`PULSEBEAT_ADMIN_PASSWORD`** if you want a known initial `admin` password; otherwise the first boot logs a **one-off random password**.
