@@ -1,15 +1,15 @@
+# Pulsebeat
+
+**Pulsebeat** is a self-hosted uptime and health console for the services you care about. Watch HTTP, TCP, ping, and DNS targets from one place: a fast **dark, glass-style UI**, **SSL/TLS insight** for HTTPS checks, **tags and filters**, **maintenance windows** that silence alerts during planned work, and **notification channels** (including webhooks) so your team hears about incidents on your terms.
+
+Run it at home, on a VPS, or in Docker — your data stays **yours**, in a **SQLite** database you control.
+
 <p align="center">
   <img src="docs/images/pulsebeat-monitor-detail.png" alt="Pulsebeat monitor detail — Live view with response time chart, uptime, and SSL/TLS certificate health" width="920" />
 </p>
 <p align="center">
   <img src="docs/images/pulsebeat-hub.png" alt="Pulsebeat — uptime dashboard, webhook alerts, maintenance windows, self-monitoring, and rich per-monitor analytics" width="920" />
 </p>
-
-# Pulsebeat
-
-**Pulsebeat** is a self-hosted uptime and health console for the services you care about. Watch HTTP, TCP, ping, and DNS targets from one place: a fast **dark, glass-style UI**, **SSL/TLS insight** for HTTPS checks, **tags and filters**, **maintenance windows** that silence alerts during planned work, and **notification channels** (including webhooks) so your team hears about incidents on your terms.
-
-Run it at home, on a VPS, or in Docker — your data stays **yours**, in a **SQLite** database you control.
 
 ---
 
