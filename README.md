@@ -42,8 +42,6 @@ The official image serves the **web UI and REST API** on **port 4141** from a si
 
 Persistent data lives in **`./data`** on the host by default (`pulsebeat.db`). The image supports **linux/amd64** and **linux/arm64** (for example Raspberry Pi).
 
-**Image (Docker Hub):** `kaminostream/pulsebeat:latest` — `docker pull kaminostream/pulsebeat:latest`
-
 ---
 
 ## Development
