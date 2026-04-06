@@ -1,60 +1,94 @@
+<p align="center">
+  <img src="docs/images/pulsebeat-monitor-detail.png" alt="Pulsebeat monitor detail — Live view with response time chart, uptime, and SSL/TLS certificate health" width="920" />
+</p>
+<p align="center">
+  <img src="docs/images/pulsebeat-hub.png" alt="Pulsebeat — uptime dashboard, webhook alerts, maintenance windows, self-monitoring, and rich per-monitor analytics" width="920" />
+</p>
+
 # Pulsebeat
 
-Self-hosted uptime monitoring with a dark, glass-style dashboard. Express serves the built React app and the REST API on **port 4141**. SQLite stores monitors, heartbeats, incidents, and notification configuration.
+**Pulsebeat** is a self-hosted uptime and health console for the services you care about. Watch HTTP, TCP, ping, and DNS targets from one place: a fast **dark, glass-style UI**, **SSL/TLS insight** for HTTPS checks, **tags and filters**, **maintenance windows** that silence alerts during planned work, and **notification channels** (including webhooks) so your team hears about incidents on your terms.
 
-You **must sign in** to use the dashboard. Sessions use a **JWT** stored in an **httpOnly** cookie (and the same token can be sent as `Authorization: Bearer <jwt>` for scripts).
+Run it at home, on a VPS, or in Docker — your data stays **yours**, in a **SQLite** database you control.
+
+---
+
+## Highlights
+
+- **Dashboard** — At-a-glance status, response-time strips, and quick actions (including on-demand checks).
+- **Monitor detail** — Live metrics plus a **historical report** with date ranges and charts for trends and incidents.
+- **Alerts** — Wire up Telegram, email, Discord, Slack, custom webhooks, and more.
+- **Maintenance** — Schedule windows so checks still run but alerts stay quiet.
+- **Settings** — Tune defaults, retention, SSL alerting, optional **container/self-monitoring** stats, and **About** metadata.
+
+Access is **password-protected** with **JWT** sessions (`httpOnly` cookies); the same API can be used with `Authorization: Bearer` for automation.
+
+---
+
+## Quick start (Docker)
+
+The official image serves the **web UI and REST API** on **port 4141** from a single process.
+
+1. **Clone** this repository (or use your own compose file pointing at the image).
+2. **Copy** environment defaults: `cp .env.example .env`
+3. **Set** at least **`PULSEBEAT_JWT_SECRET`** (16+ characters). **Set** **`PULSEBEAT_ADMIN_PASSWORD`** if you want a known initial `admin` password; otherwise the first boot logs a **one-off random password**.
+4. **Start**:
+
+   ```bash
+   docker compose up --build -d
+   ```
+
+5. Open **http://localhost:4141**, sign in, and add your first monitor.
+
+Persistent data lives in **`./data`** on the host by default (`pulsebeat.db`). The image supports **linux/amd64** and **linux/arm64** (for example Raspberry Pi).
+
+**Image (Docker Hub):** `kaminostream/pulsebeat:latest` — `docker pull kaminostream/pulsebeat:latest`
+
+---
 
 ## Development
+
+From the repository root:
 
 ```bash
 npm install
 npm run dev
 ```
 
-- UI (Vite): [http://localhost:5173](http://localhost:5173) — proxies `/api` to the API (cookies are forwarded)
-- API: [http://localhost:4141](http://localhost:4141)
+- **UI (Vite):** [http://localhost:5173](http://localhost:5173) — proxies `/api` to the API (cookies are forwarded).
+- **API:** [http://localhost:4141](http://localhost:4141)
 
-Set `PULSEBEAT_JWT_SECRET` in `.env` (at least 16 characters) for a stable secret; if you omit it in development, a built-in dev secret is used (not for production).
+Set **`PULSEBEAT_JWT_SECRET`** in `.env` (≥16 characters) for a stable secret. If you omit it in development, a built-in dev secret is used (**not** for production).
 
-**First run:** a default user is created if the database has no users:
+**First run (no users yet):** a default account is created:
 
-- Username: `admin` (override with `PULSEBEAT_ADMIN_USER`)
-- Password: `changeme` in development if `PULSEBEAT_ADMIN_PASSWORD` is unset; in production a **random password is generated and printed once** in the server logs if `PULSEBEAT_ADMIN_PASSWORD` is unset — set `PULSEBEAT_ADMIN_PASSWORD` in `.env` to choose it explicitly.
+- Username: **`admin`** (override with `PULSEBEAT_ADMIN_USER`)
+- Password: **`changeme`** in development if `PULSEBEAT_ADMIN_PASSWORD` is unset; in production, if unset, a **random password is printed once** in the server logs — or set `PULSEBEAT_ADMIN_PASSWORD` in `.env` explicitly.
 
-Production-style run locally:
+Production-style local run:
 
 ```bash
 npm run build
 npm run start
 ```
 
-Open [http://localhost:4141](http://localhost:4141) and sign in.
+Then open [http://localhost:4141](http://localhost:4141) and sign in.
 
-## Docker
+---
 
-There is **one** service in Compose: the same Node process serves **both** the web UI (static files) and the **REST API** on port **4141**.
+## Behind a reverse proxy or custom domain
 
-Create a `.env` next to `docker-compose.yml` (see `.env.example`). **Required:** `PULSEBEAT_JWT_SECRET` (min 16 characters). **Recommended:** `PULSEBEAT_ADMIN_PASSWORD` so the initial `admin` password is known; otherwise check container logs on first boot for a generated password.
+If the browser origin and API origin differ, or you see **Content-Security-Policy** / **connect-src** issues, set **`PULSEBEAT_ALLOWED_ORIGINS`** to a comma-separated list of full origins (scheme + host, no path), e.g. `https://pulsebeat.example.com`. That feeds **CSP `connect-src`** and **credentialed CORS** for `/api`. If another layer injects a stricter CSP, adjust it there — Pulsebeat cannot override headers added in front of the app.
 
-```bash
-docker compose up --build -d
-```
-
-`-d` runs containers in the background. Without it, Compose stays attached to the process (you will see **Attaching to …** and then log output); that is normal, not a freeze.
-
-To follow logs: `docker compose logs -f`.
-
-The database is stored under `./data` on the host (`pulsebeat.db`). The image installs build tools so `better-sqlite3` compiles on **ARM64** (e.g. Raspberry Pi) and **amd64**.
-
-### Public URL, CORS, and CSP
-
-If the UI and API are served from the **same origin** (default), you typically need no extra configuration. If the browser’s origin differs from the API, or you see **Content-Security-Policy** / **connect-src** violations in the console, set **`PULSEBEAT_ALLOWED_ORIGINS`** to a comma-separated list of full origins (scheme and host only, no path), for example `https://pulsebeat.example.com`. That list is merged into the app’s **CSP `connect-src`** and is used for **credentialed CORS** on `/api`. If a reverse proxy or CDN adds its own CSP (including **Report-Only** policies such as `connect-src 'none'`), update or remove that header there—Pulsebeat cannot override headers injected in front of the Node process.
+---
 
 ## Versioning and changelog
 
-- Canonical changelog: **`CHANGELOG.md`** at the repo root (user-facing language).
-- Copies are synced to **`client/public/CHANGELOG.md`** and **`server/CHANGELOG.md`** whenever you run `npm run dev` or `npm run build`, or manually: `npm run sync-changelog`.
-- Bump **`version`** in the root `package.json`, `client/package.json`, and `server/package.json` together when you release, then add a new section to **`CHANGELOG.md`**.
+- Canonical changelog: **`CHANGELOG.md`** at the repo root.
+- Copies are synced to **`client/public/`** and **`server/`** when you run `npm run dev`, `npm run build`, or `npm run sync-changelog`.
+- For releases, bump **`version`** in the root **`package.json`**, **`client/package.json`**, and **`server/package.json`** together, then add a new section to **`CHANGELOG.md`**.
+
+---
 
 ## Licence
 
