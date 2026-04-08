@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 export const AUTH_COOKIE_NAME = 'pulsebeat_token';
 
@@ -11,7 +12,11 @@ function getSecret(): string {
     );
     process.exit(1);
   }
-  return 'dev-only-pulsebeat-jwt-secret-do-not-use-in-prod';
+  const ephemeral = crypto.randomBytes(32).toString('base64url');
+  console.warn(
+    '[Pulsebeat] PULSEBEAT_JWT_SECRET is not set; using an ephemeral development secret for this process.'
+  );
+  return ephemeral;
 }
 
 const secret = getSecret();

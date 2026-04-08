@@ -26,9 +26,14 @@ import BuildIcon from '@mui/icons-material/Build';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import HttpIcon from '@mui/icons-material/Http';
+import LanIcon from '@mui/icons-material/Lan';
+import NetworkPingIcon from '@mui/icons-material/NetworkPing';
+import DnsIcon from '@mui/icons-material/Dns';
 import { Link as RouterLink } from 'react-router-dom';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
+import CircularProgress from '@mui/material/CircularProgress';
 import { apiGet, apiSend } from '../api';
 import DashboardStatCards from '../components/DashboardStatCards';
 import MonitorFormDialog from '../components/MonitorFormDialog';
@@ -66,6 +71,7 @@ export default function Dashboard() {
   const [rowsPerPage, setRowsPerPage] = useState(15);
   const [pauseBusyId, setPauseBusyId] = useState<number | null>(null);
   const [refreshBusyId, setRefreshBusyId] = useState<number | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (document.visibilityState !== 'visible') return;
@@ -84,6 +90,8 @@ export default function Dashboard() {
       setActiveMaint(mw.windows ?? []);
     } catch {
       /* keep previous */
+    } finally {
+      setIsInitialLoading(false);
     }
   }, []);
 
@@ -163,6 +171,13 @@ export default function Dashboard() {
   }
 
   const displayName = user?.username?.trim() || 'there';
+
+  function monitorTypeIcon(type: EnrichedMonitor['type']) {
+    if (type === 'http') return <HttpIcon fontSize="small" color="action" aria-label="HTTP monitor" />;
+    if (type === 'tcp') return <LanIcon fontSize="small" color="action" aria-label="TCP monitor" />;
+    if (type === 'ping') return <NetworkPingIcon fontSize="small" color="action" aria-label="Ping monitor" />;
+    return <DnsIcon fontSize="small" color="action" aria-label="DNS monitor" />;
+  }
 
   const onTypes = (e: SelectChangeEvent<string[]>) => {
     const v = e.target.value;
@@ -287,7 +302,11 @@ export default function Dashboard() {
           />
         </Box>
 
-        {!monitors.length ? (
+        {isInitialLoading ? (
+          <Box sx={{ px: 2, py: 5, display: 'flex', justifyContent: 'center' }}>
+            <CircularProgress size={28} aria-label="Loading monitors" />
+          </Box>
+        ) : !monitors.length ? (
           <Box sx={{ px: 2, py: 4 }}>
             <Typography color="text.secondary">No monitors yet. Add one to begin tracking uptime.</Typography>
           </Box>
@@ -325,11 +344,14 @@ export default function Dashboard() {
                       >
                         <TableCell sx={{ maxWidth: 280 }}>
                           <Box component={RouterLink} to={`/monitors/${m.id}`} className="block no-underline text-inherit">
-                            <Typography variant="body2" fontWeight={700} noWrap>
-                              {m.in_maintenance ? <span title="Maintenance">🔧 </span> : null}
-                              {m.name}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {monitorTypeIcon(m.type)}
+                              <Typography variant="body1" fontWeight={700} noWrap>
+                                {m.in_maintenance ? <span title="Maintenance">🔧 </span> : null}
+                                {m.name}
+                              </Typography>
+                            </Box>
+                            <Typography variant="body2" color="text.secondary" display="block" noWrap sx={{ fontSize: '0.82rem' }}>
                               {displayUrl}
                             </Typography>
                           </Box>
@@ -346,7 +368,7 @@ export default function Dashboard() {
                         <TableCell>
                           <MonitorLatencyBars checks={m.recent_checks_30} />
                         </TableCell>
-                        <TableCell sx={{ typography: 'caption', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                        <TableCell sx={{ typography: 'body2', textTransform: 'uppercase', whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
                           {m.type}
                         </TableCell>
                         <TableCell sx={{ maxWidth: 160, verticalAlign: 'middle' }}>

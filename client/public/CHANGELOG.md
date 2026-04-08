@@ -1,6 +1,14 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.11.0
+
+### What’s new
+
+- **Dashboard UX** — Added a proper loading spinner while monitor data loads, reducing first-load content flash and making startup state clearer.
+- **Dashboard table readability** — Slightly increased monitor row text sizing for better legibility while preserving compact table density.
+- **Monitor type cues** — Added monitor-type icons in the Host column for HTTP, TCP, Ping, and DNS entries.
+
 ## 1.10.2
 
 ### What’s changed

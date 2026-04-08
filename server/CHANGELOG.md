@@ -1,6 +1,14 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.11.0
+
+### What’s new
+
+- **Alert reliability** — Added an internal down-state confirmation check before opening incidents and sending down notifications to reduce false-negative alerts from transient failures.
+- **Polling performance** — Consolidated monitor check flow to reduce duplicated logic and keep retry handling lightweight for low-power targets such as Raspberry Pi Zero W / 3 / 4.
+- **Security hardening** — Replaced the fixed development JWT fallback secret with an ephemeral per-process secret when `PULSEBEAT_JWT_SECRET` is not set.
+
 ## 1.10.2
 
 ### What’s changed
