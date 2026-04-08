@@ -1,6 +1,14 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.10.2
+
+### What’s changed
+
+- **Security** — Updated **Vite** to a patched release line to address advisories **GHSA-p9ff-h696-f583** and **GHSA-4w7w-66w2-5vf9**.
+- **Monitor history (mobile)** — Incident history tables in **Monitor detail** and **Monitor history report** now adapt better on smaller screens, so rows remain readable without awkward clipping.
+- **Mobile navigation** — The top header now stays **sticky** while you scroll, making navigation controls easier to reach on phones.
+
 ## 1.10.1
 
 ### What’s changed
