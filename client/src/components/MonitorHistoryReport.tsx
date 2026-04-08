@@ -391,14 +391,14 @@ export default function MonitorHistoryReport({ monitorId }: { monitorId: number 
         {!incidents.length ? (
           <Typography color="text.secondary">No incidents in this range</Typography>
         ) : (
-          <TableContainer sx={{ maxHeight: 320 }}>
-            <Table size="small" stickyHeader>
+          <TableContainer sx={{ maxHeight: 320, width: '100%', overflowX: 'auto' }}>
+            <Table size="small" stickyHeader sx={{ minWidth: 560 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>Started</TableCell>
-                  <TableCell>Resolved</TableCell>
-                  <TableCell>Duration</TableCell>
-                  <TableCell>Cause</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Started</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Resolved</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Duration</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Cause</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -414,10 +414,10 @@ export default function MonitorHistoryReport({ monitorId }: { monitorId: number 
                           })
                         : '—'}
                     </TableCell>
-                    <TableCell sx={{ typography: 'data' }}>
+                    <TableCell sx={{ typography: 'data', whiteSpace: 'nowrap' }}>
                       {row.duration_sec != null ? `${row.duration_sec}s` : '—'}
                     </TableCell>
-                    <TableCell>{row.cause || '—'}</TableCell>
+                    <TableCell sx={{ minWidth: 180 }}>{row.cause || '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

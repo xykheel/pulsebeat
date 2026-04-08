@@ -339,6 +339,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         {isMobile ? (
           <Box
             sx={{
+              position: 'sticky',
+              top: 0,
+              zIndex: theme.zIndex.appBar,
               display: 'flex',
               alignItems: 'center',
               gap: 1,
@@ -347,6 +350,8 @@ export default function Layout({ children }: { children: ReactNode }) {
               borderBottom: 1,
               borderColor: 'divider',
               bgcolor: 'background.paper',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
               flexShrink: 0,
             }}
           >

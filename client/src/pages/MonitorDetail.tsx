@@ -517,36 +517,38 @@ export default function MonitorDetail() {
           {!incidents.length ? (
             <Typography color="text.secondary">No incidents recorded</Typography>
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Started</TableCell>
-                  <TableCell>Resolved</TableCell>
-                  <TableCell>Duration</TableCell>
-                  <TableCell>Cause</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {incidents.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell sx={{ typography: 'dataSmall' }}>
-                      {new Date(row.started_at).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })}
-                    </TableCell>
-                    <TableCell sx={{ typography: 'dataSmall' }}>
-                      {row.resolved_at
-                        ? new Date(row.resolved_at).toLocaleString('en-AU', {
-                            timeZone: 'Australia/Sydney',
-                          })
-                        : '—'}
-                    </TableCell>
-                    <TableCell sx={{ typography: 'data' }}>
-                      {row.duration_sec != null ? `${row.duration_sec}s` : '—'}
-                    </TableCell>
-                    <TableCell>{row.cause || '—'}</TableCell>
+            <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 560 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Started</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Resolved</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Duration</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>Cause</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {incidents.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell sx={{ typography: 'dataSmall', whiteSpace: 'nowrap' }}>
+                        {new Date(row.started_at).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })}
+                      </TableCell>
+                      <TableCell sx={{ typography: 'dataSmall', whiteSpace: 'nowrap' }}>
+                        {row.resolved_at
+                          ? new Date(row.resolved_at).toLocaleString('en-AU', {
+                              timeZone: 'Australia/Sydney',
+                            })
+                          : '—'}
+                      </TableCell>
+                      <TableCell sx={{ typography: 'data', whiteSpace: 'nowrap' }}>
+                        {row.duration_sec != null ? `${row.duration_sec}s` : '—'}
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 180 }}>{row.cause || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </GlassCard>
       </Stack>

@@ -1,6 +1,6 @@
 {
   "name": "pulsebeat-client",
-  "version": "1.10.1",
+  "version": "1.10.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -29,6 +29,6 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3"
+    "vite": "^6.4.2"
   }
 }
