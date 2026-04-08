@@ -24,6 +24,8 @@ import { notifyMonitorEvent, notifySslAlert } from './notifications/dispatch.js'
 const execFileAsync = promisify(execFile);
 
 const timers = new Map<number, ReturnType<typeof setInterval>>();
+const DOWN_CONFIRMATION_ATTEMPTS = 1;
+const RETRY_DELAY_MS = 500;
 
 function parseTcpTarget(url: string): { host: string; port: number } {
   const s = url.trim();
@@ -517,6 +519,49 @@ async function checkHttp(
   return { result: { ok: false, latency: null, message: lastMessage }, ssl: null };
 }
 
+async function runSingleCheck(
+  monitor: MonitorRow,
+  timeout: number,
+  retries: number
+): Promise<{ result: CheckResult; sslRow: SslCheckInsert | null }> {
+  if (monitor.type === 'http') {
+    const validateTls = monitor.check_ssl === 1;
+    const { result, ssl } = await checkHttp(monitor.id, monitor.url, timeout, retries, validateTls);
+    return { result, sslRow: ssl };
+  }
+
+  if (monitor.type === 'tcp') {
+    const { host, port } = parseTcpTarget(monitor.url);
+    let result = await checkTcp(host, port, timeout);
+    for (let i = 0; !result.ok && i < retries; i++) {
+      await new Promise((res) => setTimeout(res, RETRY_DELAY_MS));
+      result = await checkTcp(host, port, timeout);
+    }
+    return { result, sslRow: null };
+  }
+
+  if (monitor.type === 'ping') {
+    const host = monitor.url.replace(/^ping:\/\//, '').trim();
+    let result = await checkPing(host, timeout);
+    for (let i = 0; !result.ok && i < retries; i++) {
+      await new Promise((res) => setTimeout(res, RETRY_DELAY_MS));
+      result = await checkPing(host, timeout);
+    }
+    return { result, sslRow: null };
+  }
+
+  if (monitor.type === 'dns') {
+    let result = await checkDns(monitor, timeout);
+    for (let i = 0; !result.ok && i < retries; i++) {
+      await new Promise((res) => setTimeout(res, RETRY_DELAY_MS));
+      result = await checkDns(monitor, timeout);
+    }
+    return { result, sslRow: null };
+  }
+
+  return { result: { ok: false, latency: null, message: 'Unknown monitor type' }, sslRow: null };
+}
+
 function maybeSslNotify(
   monitor: MonitorRow,
   ssl: SslCheckInsert,
@@ -582,38 +627,21 @@ export async function checkMonitorNow(monitorId: number): Promise<void> {
 
 async function runCheck(monitor: MonitorRow): Promise<void> {
   const timeout = monitor.timeout_ms;
-  const retries = monitor.retries ?? 0;
+  const retries = Math.max(0, monitor.retries ?? 0);
   const inMaint = isMonitorInActiveMaintenance(monitor.id);
-  let result: CheckResult;
-  let sslRow: SslCheckInsert | null = null;
+  const prev = getLatestHeartbeat(monitor.id);
+  const wasUp = prev ? prev.status === 1 : true;
 
-  if (monitor.type === 'http') {
-    const validateTls = monitor.check_ssl === 1;
-    const { result: r, ssl } = await checkHttp(monitor.id, monitor.url, timeout, retries, validateTls);
-    result = r;
-    sslRow = ssl;
-  } else if (monitor.type === 'tcp') {
-    const { host, port } = parseTcpTarget(monitor.url);
-    result = await checkTcp(host, port, timeout);
-    for (let i = 0; !result.ok && i < retries; i++) {
-      await new Promise((res) => setTimeout(res, 500));
-      result = await checkTcp(host, port, timeout);
+  let { result, sslRow } = await runSingleCheck(monitor, timeout, retries);
+
+  // Confirm "down" transitions once more to reduce transient false alarms.
+  if (!inMaint && wasUp && !result.ok) {
+    for (let i = 0; i < DOWN_CONFIRMATION_ATTEMPTS && !result.ok; i++) {
+      await new Promise((res) => setTimeout(res, RETRY_DELAY_MS));
+      const followUp = await runSingleCheck(monitor, timeout, 0);
+      result = followUp.result;
+      sslRow = followUp.sslRow;
     }
-  } else if (monitor.type === 'ping') {
-    const host = monitor.url.replace(/^ping:\/\//, '').trim();
-    result = await checkPing(host, timeout);
-    for (let i = 0; !result.ok && i < retries; i++) {
-      await new Promise((res) => setTimeout(res, 500));
-      result = await checkPing(host, timeout);
-    }
-  } else if (monitor.type === 'dns') {
-    result = await checkDns(monitor, timeout);
-    for (let i = 0; !result.ok && i < retries; i++) {
-      await new Promise((res) => setTimeout(res, 500));
-      result = await checkDns(monitor, timeout);
-    }
-  } else {
-    result = { ok: false, latency: null, message: 'Unknown monitor type' };
   }
 
   if (sslRow) {
@@ -621,9 +649,6 @@ async function runCheck(monitor: MonitorRow): Promise<void> {
     insertSslCheck(sslRow);
     maybeSslNotify(monitor, sslRow, inMaint, prevSsl);
   }
-
-  const prev = getLatestHeartbeat(monitor.id);
-  const wasUp = prev ? prev.status === 1 : true;
 
   insertHeartbeat(
     monitor.id,
