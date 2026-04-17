@@ -1,6 +1,20 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.13.0
+
+### What’s new
+
+- **Dashboard operational header** — Replaced the personalised greeting with an operational header that shows last refresh timing and fixed auto-refresh cadence for faster situational awareness.
+- **Status stat cards** — Introduced clickable **Operational / Down / Paused** cards and an overall 30-day uptime indicator so teams can pivot from summary to filtered view in one click.
+- **Filtering and table controls** — Reworked dashboard filtering with search, tag chips, type menu, active filter chips, URL-synced state, and sortable **Uptime 30d** / **Last check** columns for quicker list triage.
+- **Inline monitor actions** — Added row-level inline actions for pause/resume, force check, incident deep-linking when a monitor stays down, and quick settings access without leaving the table.
+- **Add monitor modal refresh** — Added an in-page **Add monitor** modal with monitor-type presets, advanced options, and immediate row highlighting after creation to keep setup in context.
+- **Quick settings workflow** — Added a focused quick settings dialog for common edits (name, cadence, timeout, tags) plus inline delete confirmation for day-to-day maintenance tasks.
+- **Pause and resume safeguards** — Added a pause confirmation flow with optional “don’t ask again” preference and a resume toast that confirms reactivation intent and timing.
+- **Force-check inline states** — Added inline force-check progress and outcome states so operators can see “checking”, “recovered”, or “still down” context directly in the affected row.
+- **Dark-mode readability polish** — Adjusted down-state row and chart incident styling on **Monitor detail** to improve contrast and scanning comfort on dark themes.
+
 ## 1.12.0
 
 ### What’s new

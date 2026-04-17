@@ -77,7 +77,17 @@ Cookies for JWT sessions work in this setup because the browser talks to the Vit
 - **API helpers**: `client/src/api.ts` wraps `fetch` with credentialed requests and JSON handling.
 - **Theming**: `client/src/theme/` — central brand tokens, MUI theme factory, glass-style presets, CSS variables for Tailwind alignment.
 
-### Monitor detail (v1.12.0 UI shell)
+### Dashboard operations redesign (v1.13.0)
+
+- **Operational header + refresh model**: `client/src/pages/Dashboard.tsx` now uses a neutral operational header (`Dashboard`) with explicit “last updated” relative timing and a fixed 30-second polling interval.
+- **Top-line triage cards**: Clickable **Operational / Down / Paused** stat cards and a 30-day uptime progress card drive the active status filter and provide immediate fleet posture context.
+- **Filter model and URL state**: Search query, status, tags, type filter, sorting, and rows-per-page are stored in URL params (`useSearchParams`) so views are shareable and restorable across refresh/navigation.
+- **Table information architecture**: The main table now prioritises `Monitor`, `Uptime 30d`, `Response trend`, `Last check`, and `Actions`; rows are clickable for navigation while control cells stop propagation for inline actions.
+- **Inline incident handling**: Down rows expose force-check actions; “still down” results shift to a direct “View incident” CTA. Non-down rows keep icon-based force-check and pause/resume controls.
+- **Operator feedback states**: Force-check feedback is rendered inline per row (`checking`, `success`, `down`) with timed success reset, and resuming a paused monitor triggers a confirmation toast with the next expected cadence.
+- **In-context monitor management**: Added dashboard-local dialogs for creating monitors (including advanced fields and TLS toggle), quick-editing common monitor fields, delete confirmation, and pause confirmation with a persisted “don’t ask again” preference.
+
+### Monitor detail (v1.13.0 readability adjustments)
 
 - **Persistent header**: `client/src/pages/MonitorDetail.tsx` keeps the status/context header (name, state chips, actions) outside tab panels so it persists across **Live**, **History**, and **Checks**.
 - **Tab split**: Live now focuses on current state and preview data; History keeps the date-range report (`MonitorHistoryReport`); Checks is the canonical table workflow with status filters (all/up/down), explicit date-range loading, and paginated results for larger datasets.
@@ -87,6 +97,7 @@ Cookies for JWT sessions work in this setup because the browser talks to the Vit
 - **Response chart clarity**: `client/src/components/ResponseTimeChart.tsx` improves y-axis value formatting for readability and overlays incident annotations (up to eight nearest incidents) on the line chart.
 - **Above-the-fold cards**: Live uses a side-by-side grid for `SslHealthPanel` and a new monitor config summary card so TLS health and core check settings are immediately visible.
 - **TLS details interaction**: `client/src/components/SslHealthPanel.tsx` adds a compact details toggle so certificate metadata is available on demand without increasing default card height.
+- **Dark-mode contrast pass**: Down-state row highlighting in monitor detail tables and incident annotation chips in response-time charts were adjusted to darker, higher-contrast styling for better accessibility in dark themes.
 
 ### Build output
 
