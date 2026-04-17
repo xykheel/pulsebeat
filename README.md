@@ -15,9 +15,12 @@ Run it at home, on a VPS, or in Docker — your data stays **yours**, in a **SQL
 
 ## Highlights
 
-- **Dashboard** — At-a-glance status, response-time strips, and quick actions (including on-demand checks).
+- **Dashboard operations hub** — Redesigned operational header, clickable status stat cards, stronger filtering, sortable table columns, and URL-synced list state for faster triage.
+- **Inline actions that keep context** — Pause/resume, force-check with inline progress/outcome states, incident deep-linking, and quick settings are all available from each monitor row.
+- **In-place monitor management** — Add monitors in a focused modal (with advanced options) and quick-edit common settings without leaving the dashboard.
 - **Monitor detail** — A persistent status header across **Live**, **History**, and **Checks**, with a canonical Checks tab that supports status filters, date-range queries, pagination, CSV export, and incident deep links into History.
-- **Monitor analytics** — History now uses a full-width stacked outcomes bar (with always-visible down segments and legend), plain-language incident durations with precise-seconds tooltips, and response-time charts tuned for faster outage triage.
+- **Monitor analytics** — History uses a full-width stacked outcomes bar (with always-visible down segments and legend), plain-language incident durations with precise-seconds tooltips, and response-time charts tuned for faster outage triage.
+- **Dark-mode accessibility polish** — Monitor detail table and chart down-state contrast has been refined to improve readability in low-light operational setups.
 - **SSL and config at a glance** — Above-the-fold **SSL / TLS health** (with details toggle) sits beside a dedicated monitor config card.
 - **Alerts** — Wire up Telegram, email, Discord, Slack, custom webhooks, and more.
 - **Maintenance** — Schedule windows so checks still run but alerts stay quiet.
@@ -64,6 +67,17 @@ services:
 5. Open **http://localhost:4141**, sign in, and add your first monitor.
 
 Persistent data lives in **`./data`** on the host by default (`pulsebeat.db`). The image supports **linux/amd64** and **linux/arm64** (for example Raspberry Pi).
+
+### Docker watch (live rebuild while you work)
+
+If you want to keep Docker running and automatically rebuild on source changes:
+
+```bash
+docker compose up --build -d
+docker compose watch
+```
+
+`docker compose watch` uses the `develop.watch` rules in `docker-compose.yml` and will rebuild/recreate the `pulsebeat` service when `client/`, `server/`, or build manifests change.
 
 ---
 

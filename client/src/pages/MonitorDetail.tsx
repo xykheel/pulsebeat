@@ -298,7 +298,7 @@ export default function MonitorDetail() {
                   row.status === 1
                     ? undefined
                     : {
-                        backgroundColor: 'error.light',
+                        backgroundColor: (t) => `${t.palette.error.main}24`,
                         '& > *': {
                           backgroundColor: 'transparent',
                         },
@@ -718,7 +718,7 @@ export default function MonitorDetail() {
                           row.status === 1
                             ? undefined
                             : {
-                                backgroundColor: 'error.light',
+                                backgroundColor: (t) => `${t.palette.error.main}24`,
                                 '& > *': {
                                   backgroundColor: 'transparent',
                                 },
