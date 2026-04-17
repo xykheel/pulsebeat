@@ -16,7 +16,9 @@ Run it at home, on a VPS, or in Docker — your data stays **yours**, in a **SQL
 ## Highlights
 
 - **Dashboard** — At-a-glance status, response-time strips, and quick actions (including on-demand checks).
-- **Monitor detail** — Live metrics plus a **historical report** with date ranges and charts for trends and incidents.
+- **Monitor detail** — A persistent status header across **Live**, **History**, and **Checks**, with a canonical Checks tab that supports status filters, date-range queries, pagination, CSV export, and incident deep links into History.
+- **Monitor analytics** — History now uses a full-width stacked outcomes bar (with always-visible down segments and legend), plain-language incident durations with precise-seconds tooltips, and response-time charts tuned for faster outage triage.
+- **SSL and config at a glance** — Above-the-fold **SSL / TLS health** (with details toggle) sits beside a dedicated monitor config card.
 - **Alerts** — Wire up Telegram, email, Discord, Slack, custom webhooks, and more.
 - **Maintenance** — Schedule windows so checks still run but alerts stay quiet.
 - **Settings** — Tune defaults, retention, SSL alerting, optional **container/self-monitoring** stats, and **About** metadata.

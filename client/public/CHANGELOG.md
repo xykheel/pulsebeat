@@ -1,13 +1,27 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
-## 1.11.0
+## 1.12.0
 
+### What’s new
+
+- **Monitor detail shell** — Added a persistent status header that stays visible while switching between Live, History, and Checks tabs.
+- **Response-time chart readability** — Improved y-axis labelling and added incident annotations so outage context is clearer at a glance.
+- **History outcomes bar** — Replaced the outcomes pie with a stacked up/down bar so check distribution is easier to scan, including tiny down slices that stay visible.
+- **Humanised incident durations** — Incident rows now show readable durations (`sec`, `min`, `h m`) with exact seconds on hover for quicker incident triage.
+- **SSL / TLS health placement** — Moved the SSL / TLS health card above the fold and added a details toggle for certificate fields.
+- **Monitor config visibility** — Added a dedicated monitor configuration card beside SSL health for quick access to target and check settings.
+- **Checks tab overhaul** — Added a canonical **Checks** tab with status filters (**All / UP / DOWN**), date range controls, pagination, CSV export, and incident deep links that jump straight into **History** with the matching window.
+
+## 1.11.0
+d
 ### What’s new
 
 - **Dashboard UX** — Added a proper loading spinner while monitor data loads, reducing first-load content flash and making startup state clearer.
 - **Dashboard table readability** — Slightly increased monitor row text sizing for better legibility while preserving compact table density.
 - **Monitor type cues** — Added monitor-type icons in the Host column for HTTP, TCP, Ping, and DNS entries.
+- **Alert reliability** — Added an internal down-state confirmation check before opening incidents and sending down notifications to reduce false-negative alerts from transient failures.
+- **Security hardening** — Replaced the fixed development JWT fallback secret with an ephemeral per-process secret when `PULSEBEAT_JWT_SECRET` is not set.
 
 ## 1.10.2
 
