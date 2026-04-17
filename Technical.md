@@ -77,6 +77,17 @@ Cookies for JWT sessions work in this setup because the browser talks to the Vit
 - **API helpers**: `client/src/api.ts` wraps `fetch` with credentialed requests and JSON handling.
 - **Theming**: `client/src/theme/` — central brand tokens, MUI theme factory, glass-style presets, CSS variables for Tailwind alignment.
 
+### Monitor detail (v1.12.0 UI shell)
+
+- **Persistent header**: `client/src/pages/MonitorDetail.tsx` keeps the status/context header (name, state chips, actions) outside tab panels so it persists across **Live**, **History**, and **Checks**.
+- **Tab split**: Live now focuses on current state and preview data; History keeps the date-range report (`MonitorHistoryReport`); Checks is the canonical table workflow with status filters (all/up/down), explicit date-range loading, and paginated results for larger datasets.
+- **Checks export and incident drill-in**: Checks supports CSV export of the active filtered set, and down rows can deep-link to the related incident in History by switching tabs and preloading the incident-aligned date window.
+- **History outcomes visual**: `client/src/components/MonitorHistoryReport.tsx` uses a full-width stacked up/down bar (with inline labels and a legend) instead of the pie; tiny down percentages are clamped to a minimum visible width so they are still noticeable.
+- **Incident duration readability**: incident rows in the same report render plain-language durations (`sec`, `min`, `h m`) from `client/src/utils/incidentDuration.ts`, while tooltips retain exact seconds for precision.
+- **Response chart clarity**: `client/src/components/ResponseTimeChart.tsx` improves y-axis value formatting for readability and overlays incident annotations (up to eight nearest incidents) on the line chart.
+- **Above-the-fold cards**: Live uses a side-by-side grid for `SslHealthPanel` and a new monitor config summary card so TLS health and core check settings are immediately visible.
+- **TLS details interaction**: `client/src/components/SslHealthPanel.tsx` adds a compact details toggle so certificate metadata is available on demand without increasing default card height.
+
 ### Build output
 
 - **`npm run build -w client`** runs `tsc --noEmit` then **`vite build`**, outputting to **`client/dist`**.

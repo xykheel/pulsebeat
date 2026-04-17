@@ -1,5 +1,6 @@
-import { Box, Grid, Stack, Table, TableBody, TableCell, TableRow, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useState } from 'react';
+import { Box, Button, Grid, Stack, Table, TableBody, TableCell, TableRow, Typography } from '@mui/material';
+import { useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import ShieldIcon from '@mui/icons-material/Shield';
 import GlassCard from './GlassCard';
 import type { SslCheckRow } from '../types';
@@ -43,14 +44,27 @@ function shieldSx(level: ShieldLevel) {
 export default function SslHealthPanel({
   latest,
   history,
+  sx,
 }: {
   latest: SslCheckRow | null;
   history: SslCheckRow[];
+  sx?: SxProps<Theme>;
 }) {
+  const [showDetails, setShowDetails] = useState(false);
   const theme = useTheme();
   if (!latest) {
     return (
-      <GlassCard sx={{ p: 2.5 }}>
+      <GlassCard
+        sx={[
+          {
+            p: 2.5,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+          ...(Array.isArray(sx) ? sx : [sx]),
+        ]}
+      >
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
           <ShieldIcon sx={{ fontSize: 28, ...shieldSx('neutral') }} aria-hidden />
           <Typography variant="h6" component="h2" sx={{ m: 0 }}>
@@ -85,31 +99,18 @@ export default function SslHealthPanel({
       : 50;
 
   const trend = [...history].reverse().filter((r) => r.days_remaining != null);
-  const w = 720;
-  const h = 140;
-  const pad = { t: 16, r: 16, b: 28, l: 44 };
-  const innerW = w - pad.l - pad.r;
-  const innerH = h - pad.t - pad.b;
-  const days = trend.map((r) => r.days_remaining!);
-  const dMin = days.length ? Math.min(...days) : 0;
-  const dMax = days.length ? Math.max(...days, dMin + 1) : 1;
-  const dSpan = dMax - dMin || 1;
-  const t0 = trend[0]?.checked_at ?? now;
-  const t1 = trend[trend.length - 1]?.checked_at ?? now;
-  const tSpan = Math.max(1, t1 - t0);
-  const path =
-    trend.length > 1
-      ? trend
-          .map((p, i) => {
-            const x = pad.l + ((p.checked_at - t0) / tSpan) * innerW;
-            const y = pad.t + innerH - ((p.days_remaining! - dMin) / dSpan) * innerH;
-            return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-          })
-          .join(' ')
-      : '';
-
   return (
-    <GlassCard sx={{ p: 2.5 }}>
+    <GlassCard
+      sx={[
+        {
+          p: 2.5,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+        },
+        ...(Array.isArray(sx) ? sx : [sx]),
+      ]}
+    >
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
         <ShieldIcon sx={{ fontSize: 28, ...shieldSx(shieldLevel) }} aria-hidden />
         <Typography variant="h6" component="h2" sx={{ m: 0 }}>
@@ -178,7 +179,7 @@ export default function SslHealthPanel({
               }}
             />
           </Box>
-          <Box className="mt-1 flex justify-between">
+          <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between' }}>
             <Typography variant="caption" color="text.secondary">
               {new Date(validFrom).toLocaleDateString('en-AU', { timeZone: 'Australia/Sydney' })}
             </Typography>
@@ -189,58 +190,52 @@ export default function SslHealthPanel({
         </Box>
       ) : null}
 
-      <Typography variant="subtitle2" gutterBottom sx={{ mt: 1 }}>
-        Days remaining (last {history.length} checks)
-      </Typography>
-      {trend.length > 1 ? (
-        <Box sx={{ width: '100%', overflowX: 'auto', mb: 2 }}>
-          <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-            <path
-              d={path}
-              fill="none"
-              stroke={theme.palette.chart.line}
-              strokeWidth={1.8}
-              strokeLinecap="round"
-            />
-            <text x={pad.l} y={h - 6} fill={theme.palette.text.muted} fontSize={10}>
-              {new Date(t0).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })}
-            </text>
-            <text x={w - pad.r} y={h - 6} textAnchor="end" fill={theme.palette.text.muted} fontSize={10}>
-              {new Date(t1).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })}
-            </text>
-          </svg>
-        </Box>
-      ) : (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Need more checks to plot a trend.
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={2}
+        sx={{ pt: 1, mt: 'auto' }}
+      >
+        <Typography variant="body2" color="text.secondary">
+          {trend.length > 1
+            ? `Tracking ${history.length} recent TLS checks`
+            : 'Need more checks to show TLS trend history'}
         </Typography>
-      )}
+        <Button size="small" onClick={() => setShowDetails((prev) => !prev)}>
+          {showDetails ? 'Details ↑' : 'Details ↓'}
+        </Button>
+      </Stack>
 
-      <Typography variant="subtitle2" gutterBottom>
-        Certificate details
-      </Typography>
-      <Table size="small">
-        <TableBody>
-          {[
-            ['Subject (CN)', latest.subject_cn],
-            ['Subject Alternative Names', latest.subject_alt_names],
-            ['Serial number', latest.serial_number],
-            ['SHA-256 fingerprint', latest.sha256_fingerprint],
-            ['TLS version', latest.tls_version],
-            ['Cipher suite', latest.cipher_suite],
-            ['Chain fully trusted', latest.chain_fully_trusted === 1 ? 'Yes' : 'No'],
-            ['Self-signed', latest.self_signed === 1 ? 'Yes' : 'No'],
-            ['Valid from', validFrom ? new Date(validFrom).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : '—'],
-            ['Valid to', validTo ? new Date(validTo).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : '—'],
-            ['Last message', latest.message],
-          ].map(([k, v]) => (
-            <TableRow key={String(k)}>
-              <TableCell sx={{ color: 'text.secondary', width: 200 }}>{k}</TableCell>
-              <TableCell sx={{ wordBreak: 'break-word', typography: 'body2' }}>{v || '—'}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      {showDetails ? (
+        <>
+          <Typography variant="subtitle2" gutterBottom sx={{ mt: 1 }}>
+            Certificate details
+          </Typography>
+          <Table size="small">
+            <TableBody>
+              {[
+                ['Subject (CN)', latest.subject_cn],
+                ['Subject Alternative Names', latest.subject_alt_names],
+                ['Serial number', latest.serial_number],
+                ['SHA-256 fingerprint', latest.sha256_fingerprint],
+                ['TLS version', latest.tls_version],
+                ['Cipher suite', latest.cipher_suite],
+                ['Chain fully trusted', latest.chain_fully_trusted === 1 ? 'Yes' : 'No'],
+                ['Self-signed', latest.self_signed === 1 ? 'Yes' : 'No'],
+                ['Valid from', validFrom ? new Date(validFrom).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : '—'],
+                ['Valid to', validTo ? new Date(validTo).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : '—'],
+                ['Last message', latest.message],
+              ].map(([k, v]) => (
+                <TableRow key={String(k)}>
+                  <TableCell sx={{ color: 'text.secondary', width: 200 }}>{k}</TableCell>
+                  <TableCell sx={{ wordBreak: 'break-word', typography: 'body2' }}>{v || '—'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
+      ) : null}
     </GlassCard>
   );
 }
