@@ -40,19 +40,30 @@ import AddIcon from '@mui/icons-material/Add';
 import BuildIcon from '@mui/icons-material/Build';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import DnsIcon from '@mui/icons-material/Dns';
-import HttpIcon from '@mui/icons-material/Http';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import LanIcon from '@mui/icons-material/Lan';
-import NetworkPingIcon from '@mui/icons-material/NetworkPing';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import TuneIcon from '@mui/icons-material/Tune';
 import { apiGet, apiSend } from '../api';
 import GlassCard from '../components/GlassCard';
+import MonitorTagBadge from '../components/dashboard/MonitorTagBadge';
+import ResponseSparkline from '../components/dashboard/ResponseSparkline';
+import StalePill from '../components/dashboard/StalePill';
+import StatusDot from '../components/dashboard/StatusDot';
+import type { StatusDotState } from '../components/dashboard/StatusDot';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  buildSparklineTooltips,
+  isDegradedMonitor,
+  isStale,
+  parseHttpCode,
+  slowThresholdMs,
+  uptime30d,
+  uptimeHex,
+} from '../lib/dashboardFormatters';
 import type { EnrichedMonitor, MaintenanceWindowRow, SummaryStats, TagRow } from '../types';
 
 type StatusFilter = 'up' | 'down' | 'paused';
@@ -104,12 +115,6 @@ function relativeTime(ms: number): string {
   return `${hr}h ${min % 60}m ago`;
 }
 
-function uptime30d(m: EnrichedMonitor): number | null {
-  const bars = m.daily_bars.slice(-30).filter((b) => b.pct != null);
-  if (!bars.length) return null;
-  return bars.reduce((acc, b) => acc + (b.pct ?? 0), 0) / bars.length;
-}
-
 function statusFromMonitor(m: EnrichedMonitor): StatusFilter {
   if (!m.active) return 'paused';
   return m.latest?.status === 1 ? 'up' : 'down';
@@ -120,38 +125,17 @@ function statusMatches(m: EnrichedMonitor, f: StatusFilter | null): boolean {
   return statusFromMonitor(m) === f;
 }
 
-function parseHttpCode(msg: string | null): string {
-  if (!msg) return '—';
-  const match = msg.match(/\bHTTP\s+(\d{3})\b/i);
-  return match ? match[1] : '—';
-}
-
-function staleMinutes(m: EnrichedMonitor): number | null {
-  if (!m.latest?.checked_at) return null;
-  const age = Date.now() - m.latest.checked_at;
-  const threshold = m.interval * 1000 * 1.5;
-  if (age <= threshold) return null;
-  return Math.max(1, Math.floor(age / 60000));
-}
-
-function metricColour(uptime: number | null): string {
-  if (uptime == null) return '#C7CCD1';
-  if (uptime >= 99.5) return '#4ECB9A';
-  if (uptime >= 97) return '#F2B35B';
-  return '#F09595';
+function rowStatusDot(m: EnrichedMonitor): StatusDotState {
+  if (!m.active) return 'paused';
+  if (m.latest?.status !== 1) return 'down';
+  if (isDegradedMonitor(m)) return 'degraded';
+  return 'up';
 }
 
 function cycleSort(key: SortKey, currentKey: SortKey | null, currentDir: SortDirection): { key: SortKey | null; dir: SortDirection } {
   if (currentKey !== key) return { key, dir: 'desc' };
   if (currentDir === 'desc') return { key, dir: 'asc' };
   return { key: null, dir: 'desc' };
-}
-
-function monitorTypeIcon(type: EnrichedMonitor['type']) {
-  if (type === 'http') return <HttpIcon fontSize="small" />;
-  if (type === 'tcp') return <LanIcon fontSize="small" />;
-  if (type === 'ping') return <NetworkPingIcon fontSize="small" />;
-  return <DnsIcon fontSize="small" />;
 }
 
 function typeLabel(t: EnrichedMonitor['type']): string {
@@ -206,6 +190,7 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(
     (searchParams.get('status') as StatusFilter | null) ?? null
   );
+  const [degradedFilter, setDegradedFilter] = useState(() => searchParams.get('filter') === 'degraded');
   const [tagFilter, setTagFilter] = useState<number[]>(
     (searchParams.get('tags') ?? '')
       .split(',')
@@ -221,6 +206,7 @@ export default function Dashboard() {
 
   const [typeAnchor, setTypeAnchor] = useState<HTMLElement | null>(null);
   const [overflowTagAnchor, setOverflowTagAnchor] = useState<HTMLElement | null>(null);
+  const [advancedAnchor, setAdvancedAnchor] = useState<HTMLElement | null>(null);
 
   const pausePrefKey = `pulsebeat.pause-confirm.skip.${user?.id ?? 'anon'}`;
 
@@ -261,17 +247,18 @@ export default function Dashboard() {
     const next = new URLSearchParams();
     if (search.trim()) next.set('q', search.trim());
     if (statusFilter) next.set('status', statusFilter);
+    if (degradedFilter) next.set('filter', 'degraded');
     if (tagFilter.length) next.set('tags', tagFilter.join(','));
     if (typeFilter !== 'all') next.set('type', typeFilter);
     if (sortKey) next.set('sort', sortKey);
     if (sortKey) next.set('dir', sortDir);
     if (rowsPerPage !== 15) next.set('rows', String(rowsPerPage));
     setSearchParams(next, { replace: true });
-  }, [search, statusFilter, tagFilter, typeFilter, sortKey, sortDir, rowsPerPage, setSearchParams]);
+  }, [search, statusFilter, degradedFilter, tagFilter, typeFilter, sortKey, sortDir, rowsPerPage, setSearchParams]);
 
   useEffect(() => {
     setPage(0);
-  }, [search, statusFilter, tagFilter, typeFilter, sortKey, sortDir, rowsPerPage]);
+  }, [search, statusFilter, degradedFilter, tagFilter, typeFilter, sortKey, sortDir, rowsPerPage]);
 
   useEffect(() => {
     setSkipPauseConfirm(localStorage.getItem(pausePrefKey) === '1');
@@ -292,7 +279,11 @@ export default function Dashboard() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = monitors.filter((m) => {
-      if (!statusMatches(m, statusFilter)) return false;
+      if (degradedFilter) {
+        if (!isDegradedMonitor(m)) return false;
+      } else if (!statusMatches(m, statusFilter)) {
+        return false;
+      }
       if (typeFilter !== 'all' && m.type !== typeFilter) return false;
       if (tagFilter.length) {
         const ids = new Set(m.tags.map((t) => t.id));
@@ -315,7 +306,7 @@ export default function Dashboard() {
       const tb = b.latest?.checked_at ?? 0;
       return sortDir === 'desc' ? tb - ta : ta - tb;
     });
-  }, [monitors, search, statusFilter, typeFilter, tagFilter, sortKey, sortDir]);
+  }, [monitors, search, statusFilter, degradedFilter, typeFilter, tagFilter, sortKey, sortDir]);
 
   const paged = useMemo(() => {
     const start = page * rowsPerPage;
@@ -327,7 +318,7 @@ export default function Dashboard() {
 
   const upCount = monitors.filter((m) => statusFromMonitor(m) === 'up').length;
   const downCount = monitors.filter((m) => statusFromMonitor(m) === 'down').length;
-  const pausedCount = monitors.filter((m) => statusFromMonitor(m) === 'paused').length;
+  const degradedCount = monitors.filter((m) => isDegradedMonitor(m)).length;
   const overallUptime = summary?.total ? (summary.online / summary.total) * 100 : null;
 
   async function handleCreateMonitor() {
@@ -518,36 +509,89 @@ export default function Dashboard() {
       </Stack>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 1.5, mb: 2 }}>
-        {[
-          { label: 'OPERATIONAL', value: upCount, status: 'up' as const, clickable: true },
-          { label: 'DOWN', value: downCount, status: 'down' as const, clickable: true },
-          { label: 'PAUSED', value: pausedCount, status: 'paused' as const, clickable: true },
-        ].map((card) => {
-          const active = statusFilter === card.status;
-          const colour = card.status === 'up' ? 'success.main' : card.status === 'down' ? 'error.main' : 'text.secondary';
-          return (
-            <GlassCard
-              key={card.label}
-              onClick={() => setStatusFilter((prev) => (prev === card.status ? null : card.status))}
-              sx={{
-                p: 1.5,
-                cursor: 'pointer',
-                borderColor: active ? colour : 'divider',
-                backgroundColor: active ? alpha(theme.palette.primary.main, 0.1) : undefined,
-              }}
-            >
-              <Stack direction="row" spacing={0.75} alignItems="center">
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: colour }} />
-                <Typography variant="caption" color="text.secondary">
-                  {card.label}
-                </Typography>
-              </Stack>
-              <Typography sx={{ mt: 0.5, fontSize: 24, fontWeight: 500, color: card.value === 0 ? 'text.secondary' : 'text.primary' }}>
-                {card.value}
-              </Typography>
-            </GlassCard>
-          );
-        })}
+        <GlassCard
+          onClick={() => {
+            setDegradedFilter(false);
+            setStatusFilter((prev) => (prev === 'up' ? null : 'up'));
+          }}
+          sx={{
+            p: 1.5,
+            cursor: 'pointer',
+            borderColor: statusFilter === 'up' && !degradedFilter ? 'success.main' : 'divider',
+            backgroundColor: statusFilter === 'up' && !degradedFilter ? alpha(theme.palette.primary.main, 0.1) : undefined,
+          }}
+        >
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main' }} />
+            <Typography variant="caption" color="text.secondary">
+              OPERATIONAL
+            </Typography>
+          </Stack>
+          <Typography sx={{ mt: 0.5, fontSize: 24, fontWeight: 500, color: 'text.primary' }}>{upCount}</Typography>
+        </GlassCard>
+
+        <GlassCard
+          onClick={() => {
+            setStatusFilter(null);
+            setDegradedFilter((prev) => !prev);
+          }}
+          sx={{
+            p: 1.5,
+            cursor: 'pointer',
+            opacity: degradedCount === 0 ? 0.55 : 1,
+            borderColor: degradedFilter ? '#EF9F27' : 'divider',
+            backgroundColor: degradedFilter ? alpha('#EF9F27', 0.08) : undefined,
+          }}
+        >
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#EF9F27' }} />
+            <Typography variant="caption" color="text.secondary">
+              DEGRADED
+            </Typography>
+          </Stack>
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 24,
+              fontWeight: 500,
+              color: degradedCount === 0 ? 'rgba(255,255,255,0.28)' : 'text.primary',
+            }}
+          >
+            {degradedCount}
+          </Typography>
+        </GlassCard>
+
+        <GlassCard
+          onClick={() => {
+            setDegradedFilter(false);
+            setStatusFilter((prev) => (prev === 'down' ? null : 'down'));
+          }}
+          sx={{
+            p: 1.5,
+            cursor: 'pointer',
+            opacity: downCount === 0 ? 0.55 : 1,
+            borderColor: statusFilter === 'down' ? 'error.main' : 'divider',
+            backgroundColor: statusFilter === 'down' ? alpha(theme.palette.primary.main, 0.1) : undefined,
+          }}
+        >
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
+            <Typography variant="caption" color="text.secondary">
+              DOWN
+            </Typography>
+          </Stack>
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 24,
+              fontWeight: 500,
+              color: downCount === 0 ? 'rgba(255,255,255,0.28)' : 'text.primary',
+            }}
+          >
+            {downCount}
+          </Typography>
+        </GlassCard>
+
         <GlassCard sx={{ p: 1.5 }}>
           <Typography variant="caption" color="text.secondary">
             OVERALL UPTIME (30D)
@@ -555,7 +599,7 @@ export default function Dashboard() {
           <Box sx={{ mt: 1, height: 10, borderRadius: 1, bgcolor: alpha(theme.palette.success.main, 0.2), overflow: 'hidden' }}>
             <Box sx={{ height: '100%', width: `${Math.max(0, Math.min(100, overallUptime ?? 0))}%`, bgcolor: 'success.main' }} />
           </Box>
-          <Typography sx={{ mt: 0.5, color: '#4ECB9A', fontWeight: 600 }}>{overallUptime != null ? `${overallUptime.toFixed(1)}%` : '—'}</Typography>
+          <Typography sx={{ mt: 0.5, color: '#5DCAA5', fontWeight: 600 }}>{overallUptime != null ? `${overallUptime.toFixed(1)}%` : '—'}</Typography>
         </GlassCard>
       </Box>
 
@@ -565,7 +609,7 @@ export default function Dashboard() {
             <TextField
               value={rawSearch}
               onChange={(e) => setRawSearch(e.target.value)}
-              placeholder="Search monitors…"
+              placeholder="Search by name or URL…"
               size="small"
               sx={{ minWidth: 220, flex: 1 }}
               InputProps={{
@@ -610,10 +654,22 @@ export default function Dashboard() {
             >
               {typeFilter === 'all' ? 'Type' : `Type: ${typeLabel(typeFilter as EnrichedMonitor['type'])}`}
             </Button>
+
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<TuneIcon />}
+              onClick={(e) => setAdvancedAnchor(e.currentTarget)}
+            >
+              Advanced filters
+            </Button>
           </Stack>
 
-          {(statusFilter || tagFilter.length || typeFilter !== 'all' || search.trim()) ? (
+          {(statusFilter || degradedFilter || tagFilter.length || typeFilter !== 'all' || search.trim()) ? (
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+              {degradedFilter ? (
+                <Chip label="Degraded" onDelete={() => setDegradedFilter(false)} sx={{ borderColor: '#EF9F27' }} />
+              ) : null}
               {statusFilter ? <Chip label={`Status: ${statusFilter.toUpperCase()}`} onDelete={() => setStatusFilter(null)} /> : null}
               {tagFilter.map((id) => {
                 const tag = tags.find((t) => t.id === id);
@@ -621,7 +677,16 @@ export default function Dashboard() {
               })}
               {typeFilter !== 'all' ? <Chip label={`Type: ${typeLabel(typeFilter as EnrichedMonitor['type'])}`} onDelete={() => setTypeFilter('all')} /> : null}
               {search.trim() ? <Chip label={`Search: ${search.trim()}`} onDelete={() => setRawSearch('')} /> : null}
-              <Button size="small" onClick={() => { setStatusFilter(null); setTagFilter([]); setTypeFilter('all'); setRawSearch(''); }}>
+              <Button
+                size="small"
+                onClick={() => {
+                  setStatusFilter(null);
+                  setDegradedFilter(false);
+                  setTagFilter([]);
+                  setTypeFilter('all');
+                  setRawSearch('');
+                }}
+              >
                 Clear all
               </Button>
             </Stack>
@@ -639,20 +704,58 @@ export default function Dashboard() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Monitor</TableCell>
-                    <TableCell sx={{ width: 110, cursor: 'pointer' }} onClick={() => {
-                      const next = cycleSort('uptime', sortKey, sortDir);
-                      setSortKey(next.key);
-                      setSortDir(next.dir);
-                    }}>
-                      Uptime 30d {sortKey === 'uptime' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+                    <TableCell
+                      sx={{
+                        minWidth: 140,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onClick={() => {
+                        const next = cycleSort('uptime', sortKey, sortDir);
+                        setSortKey(next.key);
+                        setSortDir(next.dir);
+                      }}
+                    >
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap' }}>
+                        Uptime 30d
+                        <Box
+                          component="span"
+                          sx={{
+                            fontSize: '1rem',
+                            lineHeight: 1,
+                            color: sortKey === 'uptime' ? '#5DCAA5' : 'text.disabled',
+                          }}
+                        >
+                          {sortKey === 'uptime' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+                        </Box>
+                      </Box>
                     </TableCell>
-                    <TableCell sx={{ width: 130 }}>Response trend</TableCell>
-                    <TableCell sx={{ width: 140, cursor: 'pointer' }} onClick={() => {
-                      const next = cycleSort('lastCheck', sortKey, sortDir);
-                      setSortKey(next.key);
-                      setSortDir(next.dir);
-                    }}>
-                      Last check {sortKey === 'lastCheck' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+                    <TableCell sx={{ width: 150 }}>Response trend (18)</TableCell>
+                    <TableCell
+                      sx={{
+                        minWidth: 148,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onClick={() => {
+                        const next = cycleSort('lastCheck', sortKey, sortDir);
+                        setSortKey(next.key);
+                        setSortDir(next.dir);
+                      }}
+                    >
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap' }}>
+                        Last check
+                        <Box
+                          component="span"
+                          sx={{
+                            fontSize: '1rem',
+                            lineHeight: 1,
+                            color: sortKey === 'lastCheck' ? '#5DCAA5' : 'text.disabled',
+                          }}
+                        >
+                          {sortKey === 'lastCheck' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+                        </Box>
+                      </Box>
                     </TableCell>
                     <TableCell sx={{ width: 170 }} align="right">
                       Actions
@@ -662,12 +765,18 @@ export default function Dashboard() {
                 <TableBody>
                   {paged.map((m) => {
                     const status = statusFromMonitor(m);
-                    const stale = staleMinutes(m);
+                    const stale = Boolean(m.latest?.checked_at && isStale(new Date(m.latest.checked_at), m.interval));
                     const force = forceStatus[m.id];
                     const url = m.type === 'dns' ? String((m.dns_config as { hostname?: string })?.hostname || m.url) : m.url;
                     const isDown = status === 'down';
                     const uptime = uptime30d(m);
-                    const statusColor = status === 'up' ? 'success.main' : status === 'down' ? 'error.main' : stale ? 'warning.main' : 'text.secondary';
+                    const dotState = rowStatusDot(m);
+                    const highlightForce = status !== 'paused' && (isDown || dotState === 'degraded');
+                    const slow = slowThresholdMs(m.timeout);
+                    const sparkLat = m.recent_checks_30.map((c) => c.latency_ms);
+                    const sparkSt = m.recent_checks_30.map((c) => (c.status === 1 ? 'up' : 'down')) as ('up' | 'down')[];
+                    const sparkTips = buildSparklineTooltips(m);
+                    const stripeColor = stale || dotState === 'degraded' ? '#EF9F27' : dotState === 'down' ? theme.palette.error.main : dotState === 'paused' ? theme.palette.text.secondary : theme.palette.success.main;
 
                     return (
                       <TableRow
@@ -677,12 +786,12 @@ export default function Dashboard() {
                         sx={{
                           cursor: 'pointer',
                           borderLeft: 3,
-                          borderLeftColor: stale ? 'warning.main' : statusColor,
+                          borderLeftColor: stale ? '#EF9F27' : stripeColor,
                           backgroundColor:
                             highlightRowId === m.id
                               ? alpha(theme.palette.success.main, 0.12)
                               : stale
-                                ? alpha(theme.palette.warning.main, 0.08)
+                                ? alpha('#EF9F27', 0.06)
                                 : status === 'down'
                                   ? alpha(theme.palette.error.main, 0.08)
                                   : undefined,
@@ -690,16 +799,33 @@ export default function Dashboard() {
                         }}
                       >
                         <TableCell>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Box sx={{ color: statusColor, display: 'inline-flex' }}>{monitorTypeIcon(m.type)}</Box>
-                            <Box sx={{ minWidth: 0 }}>
-                              <Typography fontWeight={600} noWrap>
-                                {m.name}
-                              </Typography>
-                              <Typography variant="body2" color={stale ? 'warning.main' : 'text.secondary'} noWrap>
-                                {typeLabel(m.type)} · {url}
-                                {stale ? ` · check overdue ${stale}m` : ''}
-                              </Typography>
+                          <Stack direction="row" spacing={1} alignItems="flex-start">
+                            <Box sx={{ mt: 0.5 }}>
+                              <StatusDot status={dotState} />
+                            </Box>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                                <Typography fontWeight={600} component="span" noWrap>
+                                  {m.name}
+                                </Typography>
+                                {m.tags.map((t) => (
+                                  <MonitorTagBadge key={t.id} name={t.name} />
+                                ))}
+                              </Stack>
+                              <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.25 }} flexWrap="wrap" useFlexGap>
+                                {m.type !== 'http' ? (
+                                  <Typography
+                                    component="span"
+                                    variant="captionMono"
+                                    sx={{ fontSize: '0.65rem', px: 0.5, py: 0.125, borderRadius: 0.5, bgcolor: 'action.hover' }}
+                                  >
+                                    {m.type === 'tcp' ? 'TCP' : m.type === 'ping' ? 'PING' : 'DNS'}
+                                  </Typography>
+                                ) : null}
+                                <Typography variant="body2" color="text.secondary" noWrap component="span">
+                                  {url}
+                                </Typography>
+                              </Stack>
                               {force ? (
                                 <Typography
                                   variant="body2"
@@ -712,44 +838,26 @@ export default function Dashboard() {
                           </Stack>
                         </TableCell>
                         <TableCell>
-                          <Typography sx={{ color: metricColour(uptime), fontWeight: 500 }}>
+                          <Typography sx={{ color: uptime != null ? uptimeHex(uptime) : 'text.secondary', fontWeight: 500 }}>
                             {uptime != null ? `${uptime.toFixed(1)}%` : '—'}
                           </Typography>
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Box sx={{ display: 'flex', gap: '2px', alignItems: 'end', height: 28, width: 120 }}>
-                            {m.recent_checks_30.slice(-12).map((c, idx) => {
-                              const h = c.status === 1 ? Math.max(4, ((c.latency_ms ?? 0) / 1000) * 24) : 8;
-                              const color = c.status === 1 ? theme.palette.success.main : theme.palette.error.main;
-                              return (
-                                <Tooltip
-                                  key={idx}
-                                  arrow
-                                  title={
-                                    <Box>
-                                      <Typography variant="body2">{relativeTime((m.latest?.checked_at ?? Date.now()) - (11 - idx) * m.interval * 1000)}</Typography>
-                                      <Typography variant="body2">Status: {c.status === 1 ? 'UP' : 'DOWN'}</Typography>
-                                      <Typography variant="body2">Latency: {c.latency_ms ?? '—'} ms</Typography>
-                                      <Typography variant="body2">HTTP: {parseHttpCode(m.latest?.message ?? null)}</Typography>
-                                    </Box>
-                                  }
-                                >
-                                  <Box sx={{ width: 8, height: Math.min(24, h), bgcolor: color, borderRadius: 0.5 }} />
-                                </Tooltip>
-                              );
-                            })}
-                          </Box>
+                          <ResponseSparkline latencies={sparkLat} statuses={sparkSt} slowThreshold={slow} tooltips={sparkTips} />
                         </TableCell>
                         <TableCell>
-                          <Typography color={stale ? 'warning.main' : 'text.primary'}>
-                            {m.latest?.checked_at ? relativeTime(m.latest.checked_at) : '—'}
-                          </Typography>
-                          <Typography variant="body2" color={stale ? 'warning.main' : 'text.secondary'}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+                            <Typography component="span" sx={{ color: stale ? '#EF9F27' : 'text.primary' }}>
+                              {m.latest?.checked_at ? relativeTime(m.latest.checked_at) : '—'}
+                            </Typography>
+                            {stale ? <StalePill /> : null}
+                          </Box>
+                          <Typography variant="body2" sx={{ color: stale ? '#EF9F27' : 'text.secondary' }}>
                             {m.latest?.latency_ms != null ? `${m.latest.latency_ms} ms` : '—'}
                           </Typography>
                         </TableCell>
                         <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                          <Stack direction="row" spacing={0.75} justifyContent="flex-end">
+                          <Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center">
                             {status === 'paused' ? (
                               <Button size="small" variant="outlined" onClick={() => void toggleMonitorActive(m)} disabled={pauseBusyId === m.id}>
                                 Resume
@@ -762,34 +870,91 @@ export default function Dashboard() {
                                   View incident →
                                 </Button>
                               ) : (
-                                <Button size="small" color="error" variant="contained" onClick={() => void forceCheck(m)} disabled={refreshBusyId === m.id}>
-                                  Force check
-                                </Button>
+                                <Tooltip title="Force check">
+                                  <span>
+                                    <IconButton
+                                      title="Force check"
+                                      aria-label="Force check"
+                                      onClick={() => void forceCheck(m)}
+                                      disabled={refreshBusyId === m.id}
+                                      sx={{
+                                        width: 32,
+                                        height: 32,
+                                        bgcolor: alpha('#5DCAA5', 0.12),
+                                        border: '1px solid #5DCAA5',
+                                        '&:hover': { bgcolor: alpha('#5DCAA5', 0.22), borderColor: '#5DCAA5' },
+                                      }}
+                                    >
+                                      <RefreshIcon sx={{ fontSize: 13 }} />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
                               )
                             ) : (
                               <Tooltip title="Force check">
                                 <span>
-                                  <IconButton size="small" onClick={() => void forceCheck(m)} disabled={refreshBusyId === m.id}>
-                                    <RefreshIcon fontSize="small" />
+                                  <IconButton
+                                    title="Force check"
+                                    aria-label="Force check"
+                                    onClick={() => void forceCheck(m)}
+                                    disabled={refreshBusyId === m.id}
+                                    sx={{
+                                      width: 32,
+                                      height: 32,
+                                      ...(highlightForce
+                                        ? {
+                                            bgcolor: alpha('#5DCAA5', 0.12),
+                                            border: '1px solid #5DCAA5',
+                                            '&:hover': { bgcolor: alpha('#5DCAA5', 0.22), borderColor: '#5DCAA5' },
+                                          }
+                                        : {
+                                            '&:hover': { bgcolor: 'action.hover' },
+                                          }),
+                                    }}
+                                  >
+                                    <RefreshIcon sx={{ fontSize: 13 }} />
                                   </IconButton>
                                 </span>
                               </Tooltip>
                             )}
 
                             {status !== 'down' ? (
-                              <Tooltip title={m.active ? 'Pause monitor' : 'Resume monitor'}>
+                              <Tooltip title={m.active ? 'Pause' : 'Resume'}>
                                 <span>
-                                  <IconButton size="small" onClick={() => void toggleMonitorActive(m)} disabled={pauseBusyId === m.id}>
-                                    {m.active ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+                                  <IconButton
+                                    title={m.active ? 'Pause' : 'Resume'}
+                                    aria-label={m.active ? 'Pause' : 'Resume'}
+                                    onClick={() => void toggleMonitorActive(m)}
+                                    disabled={pauseBusyId === m.id}
+                                    sx={{
+                                      width: 32,
+                                      height: 32,
+                                      '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' },
+                                      border: '1px solid transparent',
+                                    }}
+                                  >
+                                    {m.active ? <PauseIcon sx={{ fontSize: 13 }} /> : <PlayArrowIcon sx={{ fontSize: 13 }} />}
                                   </IconButton>
                                 </span>
                               </Tooltip>
                             ) : null}
 
                             <Tooltip title="Settings">
-                              <IconButton size="small" onClick={() => openQuickEdit(m)}>
-                                <SettingsOutlinedIcon fontSize="small" />
-                              </IconButton>
+                              <span>
+                                <IconButton
+                                  title="Settings"
+                                  aria-label="Settings"
+                                  onClick={() => openQuickEdit(m)}
+                                  sx={{
+                                    width: 32,
+                                    height: 32,
+                                    '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' },
+                                    border: '1px solid transparent',
+                                  }}
+                                >
+                                  <SettingsOutlinedIcon sx={{ fontSize: 13 }} />
+                                </IconButton>
+                              </span>
                             </Tooltip>
                           </Stack>
                         </TableCell>
@@ -850,6 +1015,21 @@ export default function Dashboard() {
             </MenuItem>
           );
         })}
+      </Menu>
+
+      <Menu anchorEl={advancedAnchor} open={Boolean(advancedAnchor)} onClose={() => setAdvancedAnchor(null)}>
+        <MenuItem
+          onClick={() => {
+            setDegradedFilter(false);
+            setStatusFilter((prev) => (prev === 'paused' ? null : 'paused'));
+            setAdvancedAnchor(null);
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 220 }}>
+            {statusFilter === 'paused' ? <CheckIcon fontSize="small" /> : <Box sx={{ width: 18 }} />}
+            <Typography>Paused monitors only</Typography>
+          </Stack>
+        </MenuItem>
       </Menu>
 
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="sm">

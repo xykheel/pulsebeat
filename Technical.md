@@ -87,6 +87,15 @@ Cookies for JWT sessions work in this setup because the browser talks to the Vit
 - **Operator feedback states**: Force-check feedback is rendered inline per row (`checking`, `success`, `down`) with timed success reset, and resuming a paused monitor triggers a confirmation toast with the next expected cadence.
 - **In-context monitor management**: Added dashboard-local dialogs for creating monitors (including advanced fields and TLS toggle), quick-editing common monitor fields, delete confirmation, and pause confirmation with a persisted “don’t ask again” preference.
 
+### Dashboard polish (v1.13.1)
+
+- **Degraded fleet posture**: `client/src/lib/dashboardFormatters.ts` defines **`isDegradedMonitor`** (stale last check, 30-day uptime below **99%**, or recent latency above **~80%** of the monitor timeout while still **UP**). The dashboard exposes a **Degraded** stat card; enabling it sets **`filter=degraded`** in the query string (and clears conflicting status filters). Paused monitors are excluded from the degraded count.
+- **Stale rule**: **`isStale`** treats a monitor as stale when the time since **`latest.checked_at`** exceeds **1.5×** **`interval`** seconds — used for row striping, the **Stale** pill (`StalePill`), and overlap with degraded detection.
+- **Response sparkline**: `ResponseSparkline` renders the last **18** checks (padded when history is short); `buildSparklineTooltips` aligns one tooltip string per bar, including **en-AU** timestamps in **Australia/Sydney**.
+- **Uptime column colours**: **`uptimeHex` / `uptimeColour`** bucket 30-day average uptime at **≥99%** (good), **≥95%** (warn), and below (danger), matching the sparkline green / amber / red palette.
+- **Advanced paused filter**: The **Advanced filters** menu includes **Paused monitors only**, toggling **`status=paused`** in the URL (and clears **degraded** when chosen from that menu).
+- **DNS target display**: For **`dns`** monitors, the Host column prefers **`dns_config.hostname`** when present so operators see the queried hostname instead of only the raw stored URL string.
+
 ### Monitor detail (v1.13.0 readability adjustments)
 
 - **Persistent header**: `client/src/pages/MonitorDetail.tsx` keeps the status/context header (name, state chips, actions) outside tab panels so it persists across **Live**, **History**, and **Checks**.
