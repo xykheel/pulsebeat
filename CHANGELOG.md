@@ -1,6 +1,19 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
 
+## 1.13.1
+
+### What’s changed
+
+- **Degraded view** — Added a **Degraded** stat card for monitors that are up but slow, stale, or below SLO-style 30-day uptime; the list filters accordingly and the URL can include **`filter=degraded`** for a shareable degraded-only view.
+- **Response trend** — Row sparklines use the last **18** checks (labelled **Response trend (18)**) with padded leading slots when history is short, per-bar tooltips (en-AU timestamps, Australia/Sydney), and colouring against a **slow** threshold derived from the monitor timeout.
+- **Status and stale** — Rows use compact **status dots**; **stale** is when the last check is older than **1.5×** the monitor interval, shown with an amber stripe, **Stale** pill, and degraded routing where relevant.
+- **Uptime colouring** — **Uptime 30d** uses **good / warn / danger** buckets (≥99%, ≥95%, below) aligned to the dashboard palette.
+- **Tags** — Tag labels use **badge** styling with optional preset accents for common names.
+- **Advanced filters** — **Advanced filters** includes **Paused monitors only** (sets **`status=paused`** in the URL alongside other query state).
+- **DNS targets** — **DNS** monitors show the configured **hostname** in the target column when it reads more clearly than the raw stored URL.
+- **Table headers** — **Uptime 30d** and **Last check** header labels stay on a single line (minimum width and `nowrap`) so the sort glyphs align with other columns.
+
 ## 1.13.0
 
 ### What’s new
@@ -28,7 +41,7 @@ Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https:
 - **Checks tab overhaul** — Added a canonical **Checks** tab with status filters (**All / UP / DOWN**), date range controls, pagination, CSV export, and incident deep links that jump straight into **History** with the matching window.
 
 ## 1.11.0
-d
+
 ### What’s new
 
 - **Dashboard UX** — Added a proper loading spinner while monitor data loads, reducing first-load content flash and making startup state clearer.

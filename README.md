@@ -16,6 +16,7 @@ Run it at home, on a VPS, or in Docker — your data stays **yours**, in a **SQL
 ## Highlights
 
 - **Dashboard operations hub** — Redesigned operational header, clickable status stat cards, stronger filtering, sortable table columns, and URL-synced list state for faster triage.
+- **Dashboard v1.13.1 polish** — **Degraded** summary card and **`filter=degraded`** URLs; **Advanced filters → Paused monitors only** (`status=paused`); eighteen-check **Response trend** sparklines with en-AU tooltips; status dots, **stale** when last check exceeds **1.5×** interval, uptime good/warn/danger buckets, tag badges, and clearer **DNS** hostname display in the target column.
 - **Inline actions that keep context** — Pause/resume, force-check with inline progress/outcome states, incident deep-linking, and quick settings are all available from each monitor row.
 - **In-place monitor management** — Add monitors in a focused modal (with advanced options) and quick-edit common settings without leaving the dashboard.
 - **Monitor detail** — A persistent status header across **Live**, **History**, and **Checks**, with a canonical Checks tab that supports status filters, date-range queries, pagination, CSV export, and incident deep links into History.
