@@ -28,6 +28,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import BuildIcon from '@mui/icons-material/Build';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { apiGet, apiSend } from '../api';
 import GlassCard from '../components/GlassCard';
 import StatusPulse from '../components/StatusPulse';
@@ -94,6 +95,7 @@ export default function MonitorDetail() {
   const [checksPage, setChecksPage] = useState(0);
   const [historyPreset, setHistoryPreset] = useState<{ fromYmd: string; toYmd: string } | null>(null);
   const [historyPresetKey, setHistoryPresetKey] = useState(0);
+  const [forceStatus, setForceStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
 
   const load = useCallback(async () => {
     if (!id || document.visibilityState !== 'visible') return;
@@ -150,14 +152,29 @@ export default function MonitorDetail() {
     return () => clearInterval(t);
   }, [load]);
 
+  async function forceCheck() {
+    if (!id) return;
+    setForceStatus('checking');
+    try {
+      await apiSend(`/api/monitors/${id}/check`, 'POST');
+      setForceStatus('success');
+      setTimeout(() => setForceStatus('idle'), 3000);
+      void load();
+    } catch (err) {
+      setForceStatus('error');
+      setTimeout(() => setForceStatus('idle'), 3000);
+    }
+  }
+
   async function confirmDelete() {
+    if (!id) return;
     try {
       await apiSend(`/api/monitors/${id}`, 'DELETE');
-      navigate('/');
+      setDelOpen(false);
+      navigate('/', { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Delete failed');
     }
-    setDelOpen(false);
   }
 
   async function loadChecksRange() {
@@ -358,6 +375,9 @@ export default function MonitorDetail() {
             <Chip size="small" label="TLS" sx={{ typography: 'caption', height: 24 }} />
           ) : null}
         </Box>
+        <IconButton aria-label="Force check" onClick={forceCheck} disabled={forceStatus === 'checking'}>
+          <RefreshIcon sx={{ animation: forceStatus === 'checking' ? 'spin 1s linear infinite' : 'none' }} />
+        </IconButton>
         <IconButton aria-label="Edit" onClick={() => setEditOpen(true)}>
           <EditIcon />
         </IconButton>

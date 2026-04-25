@@ -1,5 +1,15 @@
 Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https://semver.org).
 
+---
+
+
+## 1.13.2
+
+### What’s changed
+
+- **Monitor detail** — Added a **Force check** action to the monitor detail header so operators can run an immediate check without returning to the dashboard.
+- **Monitor deletion** — Deleting a monitor from its detail page now closes the confirmation flow and returns to the dashboard without leaving the deleted detail route in browser history.
+- **Build tooling** — Declared **node-gyp** at the workspace root to make native dependency builds more explicit for local and container installs.
 
 ## 1.13.1
 
