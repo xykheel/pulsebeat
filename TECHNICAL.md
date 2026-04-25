@@ -15,6 +15,7 @@ Canonical user-facing release notes live in **`CHANGELOG.md`** at the repository
 | Path | Role |
 |------|------|
 | **`package.json`** (root) | npm **workspaces** (`client`, `server`); scripts orchestrate changelog sync, dev, build, and production start. |
+| **`TECHNICAL.md`** | Developer and operator reference for architecture, runtime behaviour, APIs, and deployment notes. |
 | **`client/`** | Vite + React SPA; production assets are emitted to **`client/dist`**. |
 | **`server/`** | Express API, SQLite access, background check scheduler, static file serving in production. |
 | **`Dockerfile`** | Multi-stage image: builds the client, installs server dependencies, copies built static files into the server tree. |
@@ -31,6 +32,7 @@ There is **no** `.github/` workflows directory in this tree; CI/CD is not define
 
 - **Node.js**: `Dockerfile` uses **`node:20-bookworm`**. Local development should use a compatible **Node 20+** runtime.
 - **TypeScript** is used in both workspaces (`typescript` ^5.7).
+- **Native build tooling**: root dev dependencies include **`node-gyp`** so local workspace installs declare the native addon build toolchain explicitly.
 - **Module system**: both `client` and `server` use **`"type": "module"`** (ESM). Server source imports use **`.js` extensions** in import paths (TypeScript emits ESM-compatible resolution).
 
 ---
@@ -107,6 +109,8 @@ Cookies for JWT sessions work in this setup because the browser talks to the Vit
 - **Above-the-fold cards**: Live uses a side-by-side grid for `SslHealthPanel` and a new monitor config summary card so TLS health and core check settings are immediately visible.
 - **TLS details interaction**: `client/src/components/SslHealthPanel.tsx` adds a compact details toggle so certificate metadata is available on demand without increasing default card height.
 - **Dark-mode contrast pass**: Down-state row highlighting in monitor detail tables and incident annotation chips in response-time charts were adjusted to darker, higher-contrast styling for better accessibility in dark themes.
+- **Immediate detail check**: The header action group includes a **Force check** button that calls **`POST /api/monitors/:id/check`**, shows a spinning refresh icon while the request is in flight, and refreshes monitor detail data afterwards.
+- **Delete navigation**: Successful deletion closes the confirmation dialog and navigates back to the dashboard with history replacement so the removed monitor detail page is not left as the previous browser entry.
 
 ### Build output
 
