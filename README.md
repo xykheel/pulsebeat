@@ -23,6 +23,7 @@ Run it at home, on a VPS, or in Docker — your data stays **yours**, in a **SQL
 - **Monitor analytics** — History uses a full-width stacked outcomes bar (with always-visible down segments and legend), plain-language incident durations with precise-seconds tooltips, and response-time charts tuned for faster outage triage.
 - **Dark-mode accessibility polish** — Monitor detail table and chart down-state contrast has been refined to improve readability in low-light operational setups.
 - **SSL and config at a glance** — Above-the-fold **SSL / TLS health** (with details toggle) sits beside a dedicated monitor config card.
+- **Sidebar navigation** — Improved account menu placement and behavior for both desktop and mobile views, with icon-only actions on collapsed desktop rail. Sidebar features glass effects and enhanced visual consistency across all device sizes. Sidebar features glass effects and enhanced visual consistency across all device sizes.
 - **Alerts** — Wire up Telegram, email, Discord, Slack, custom webhooks, and more.
 - **Maintenance** — Schedule windows so checks still run but alerts stay quiet.
 - **Settings** — Tune defaults, retention, SSL alerting, optional **container/self-monitoring** stats, and **About** metadata.

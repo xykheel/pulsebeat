@@ -3,9 +3,16 @@ Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https:
 ---
 
 
+## 1.13.3
+
+### What's changed
+
+- **Sidebar** — Enhanced visual consistency and theming with improved hover states, smoother transitions, and consistent glass-morphism effects throughout the navigation.
+- **Sidebar** — Improved account menu placement and behavior for both desktop and mobile views. The account menu stays inside the sidebar on both desktop and mobile, with icon-only actions on collapsed desktop rail.
+
 ## 1.13.2
 
-### What’s changed
+### What's changed
 
 - **Monitor detail** — Added a **Force check** action to the monitor detail header so operators can run an immediate check without returning to the dashboard.
 - **Monitor deletion** — Deleting a monitor from its detail page now closes the confirmation flow and returns to the dashboard without leaving the deleted detail route in browser history.
@@ -13,7 +20,7 @@ Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https:
 
 ## 1.13.1
 
-### What’s changed
+### What's changed
 
 - **Degraded view** — Added a **Degraded** stat card for monitors that are up but slow, stale, or below SLO-style 30-day uptime; the list filters accordingly and the URL can include **`filter=degraded`** for a shareable degraded-only view.
 - **Response trend** — Row sparklines use the last **18** checks (labelled **Response trend (18)**) with padded leading slots when history is short, per-bar tooltips (en-AU timestamps, Australia/Sydney), and colouring against a **slow** threshold derived from the monitor timeout.
@@ -23,6 +30,7 @@ Release notes for Pulsebeat. Version numbers follow [Semantic Versioning](https:
 - **Advanced filters** — **Advanced filters** includes **Paused monitors only** (sets **`status=paused`** in the URL alongside other query state).
 - **DNS targets** — **DNS** monitors show the configured **hostname** in the target column when it reads more clearly than the raw stored URL.
 - **Table headers** — **Uptime 30d** and **Last check** header labels stay on a single line (minimum width and `nowrap`) so the sort glyphs align with other columns.
+- **Sidebar** — Refactored account menu to stay inside the sidebar on mobile and desktop, with icon-only actions on collapsed desktop rail.
 
 ## 1.13.0
 
