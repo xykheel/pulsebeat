@@ -88,6 +88,7 @@ Cookies for JWT sessions work in this setup because the browser talks to the Vit
 - **Inline incident handling**: Down rows expose force-check actions; “still down” results shift to a direct “View incident” CTA. Non-down rows keep icon-based force-check and pause/resume controls.
 - **Operator feedback states**: Force-check feedback is rendered inline per row (`checking`, `success`, `down`) with timed success reset, and resuming a paused monitor triggers a confirmation toast with the next expected cadence.
 - **In-context monitor management**: Added dashboard-local dialogs for creating monitors (including advanced fields and TLS toggle), quick-editing common monitor fields, delete confirmation, and pause confirmation with a persisted “don’t ask again” preference.
+- **Sidebar navigation**: The account menu now stays inside the sidebar on both mobile and desktop views. On the collapsed desktop rail, actions are shown as icon-only for better space efficiency. Sidebar features glass effects and enhanced visual consistency across all device sizes.
 
 ### Dashboard polish (v1.13.1)
 

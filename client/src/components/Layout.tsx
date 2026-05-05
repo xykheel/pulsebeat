@@ -30,8 +30,8 @@ import type { AboutInfo, AppSettingsPublic } from '../types';
 
 const SIDEBAR_EXPANDED = 240;
 const SIDEBAR_COLLAPSED = 64;
-const SIDEBAR_TRANSITION = 'width 200ms ease, min-width 200ms ease';
-const MAIN_MARGIN_TRANSITION = 'margin-left 200ms ease';
+const SIDEBAR_TRANSITION = 'width 250ms ease, min-width 250ms ease';
+const MAIN_MARGIN_TRANSITION = 'margin-left 250ms ease';
 const STORAGE_KEY = 'pulsebeat:sidebar-collapsed';
 const MOBILE_QUERY = '(max-width:767.95px)';
 
@@ -167,10 +167,17 @@ export default function Layout({ children }: { children: ReactNode }) {
                 '&.Mui-selected': {
                   borderLeftColor: CYAN,
                   bgcolor: 'action.selected',
+                  '&:hover': {
+                    bgcolor: 'action.selected',
+                  },
                 },
                 '&:hover': {
                   bgcolor: 'action.hover',
+                  '& .MuiListItemIcon-root': {
+                    color: CYAN,
+                  },
                 },
+                transition: 'all 250ms ease',
               }}
             >
               <ListItemIcon
@@ -179,6 +186,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   mr: narrow ? 0 : undefined,
                   justifyContent: 'center',
                   color: selected ? CYAN : 'text.secondary',
+                  transition: 'color 250ms ease',
                 }}
               >
                 <Icon fontSize="small" />
@@ -211,6 +219,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         minHeight: 72,
         flexShrink: 0,
         justifyContent: opts.collapsed ? 'center' : 'flex-start',
+        transition: 'all 250ms ease',
       }}
     >
       <IconButton
@@ -264,8 +273,14 @@ export default function Layout({ children }: { children: ReactNode }) {
             border: 1,
             borderColor: 'divider',
             bgcolor: 'background.paper',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
             boxShadow: 1,
-            '&:hover': { bgcolor: 'action.hover' },
+            '&:hover': { 
+              bgcolor: 'action.hover',
+              border: 1,
+              borderColor: 'divider',
+            },
           }}
         >
           {collapsed ? <ChevronRightIcon sx={{ fontSize: 18 }} /> : <ChevronLeftIcon sx={{ fontSize: 18 }} />}
