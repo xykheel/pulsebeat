@@ -1,5 +1,6 @@
 #ide
 .cursor/
+.idea/
 
 # Logs
 logs
